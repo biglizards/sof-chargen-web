@@ -31,6 +31,12 @@ pub enum Stat {
     Luck,
 }
 
+impl fmt::Display for Stat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
 pub const CORE_STATS: [Stat; 5] = [Stat::Arms, Stat::Face, Stat::Hands, Stat::Legs, Stat::Mind];
 
 impl Stat {
