@@ -56,4 +56,5 @@ impl Stat {
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct Character {
     pub stats: EnumMap<Stat, Option<i8>>,
+    pub name: String,
 }

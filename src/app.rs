@@ -2,6 +2,7 @@
 use async_std::task;
 
 use egui::{Layout, RichText, Ui};
+use sof_chargen::event::{roll_core_stats, Event};
 use sof_chargen::{event, Backend, Character, Stat, CORE_STATS};
 use std::fmt;
 use std::future::Future;
@@ -193,6 +194,14 @@ impl eframe::App for SoFCharGenApp {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("SoF Chargen");
 
+            // first row: name, [blank], luck, magic
+            ui.columns(4, |columns| {
+                columns[0].text_edit_singleline(&mut self.character.write().unwrap().name);
+                // luck and magic
+                columns[2].label(format!("Magic: {}", self.get_stat_str(Stat::Magic)));
+                columns[3].label(format!("Luck: {}", self.get_stat_str(Stat::Luck)));
+            });
+
             // add the core stats
             ui.columns(5, |columns| {
                 for (i, &stat) in CORE_STATS.iter().enumerate() {
@@ -200,15 +209,25 @@ impl eframe::App for SoFCharGenApp {
                 }
             });
 
-            if ui.button("Generate column").clicked() {
+            ui.separator();
+
+            if ui.button("Generate Core Stats").clicked() {
                 let mut b = self.backend.clone();
                 spawn_thread(async move {
-                    event::pick_stat(&mut b).await;
+                    roll_core_stats::<AppBackend>().run(&mut b).await;
+                });
+            }
+            if ui.button("Roll Magic and Luck").clicked() {
+                let mut b = self.backend.clone();
+                spawn_thread(async move {
+                    event::roll_magic(&mut b).await;
+                    event::roll_luck(&mut b).await;
                 });
             }
             if ui.button("Reset").clicked() {
                 *self.backend.character.write().unwrap() = Character {
                     stats: Default::default(),
+                    name: "Enter Name".to_string(),
                 };
             }
 

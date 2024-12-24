@@ -2,6 +2,7 @@ use crate::backend::Backend;
 use crate::character::{Stat, CORE_STATS};
 use crate::dice;
 use crate::dice::d100;
+use crate::event::BuiltinEvent::PickStat;
 use async_trait::async_trait;
 
 #[async_trait]
@@ -34,8 +35,7 @@ impl<T: Backend + Send + Sync> Event<T> for FileEvent<T> {
     }
 }
 
-#[allow(dead_code)]
-enum BuiltinEvent {
+pub enum BuiltinEvent {
     ProsperousConstellations,
     PickStat,
     RollMagic,
@@ -123,4 +123,19 @@ pub async fn roll_magic<T: Backend>(backend: &mut T) {
 
 pub async fn roll_luck<T: Backend>(backend: &mut T) {
     backend.set_stat(Stat::Luck, d100());
+}
+
+pub fn roll_core_stats<T: Backend>() -> FileEvent<T>
+where
+    BuiltinEvent: Event<T>,
+{
+    FileEvent {
+        sub_events: vec![
+            Box::from(PickStat),
+            Box::from(PickStat),
+            Box::from(PickStat),
+            Box::from(PickStat),
+            Box::from(PickStat),
+        ],
+    }
 }
