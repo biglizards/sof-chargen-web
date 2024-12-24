@@ -1,33 +1,16 @@
 #[macro_use]
 extern crate enum_map;
 
-use crate::dice::d100;
 use crate::event::*;
-use backend::{Backend, BaseBackend};
-use character::Stat;
+pub use backend::Backend;
+pub use character::{Character, Stat, CORE_STATS};
 use event::Event;
 
 mod backend;
 mod character;
 mod dice;
-mod event;
+pub mod event;
 
-fn not_main() {
-    let mut backend: BaseBackend = Default::default();
-    for _ in 0..5 {
-        pick_stat.run(&mut backend);
-    }
-
-    roll_luck
-        .then(roll_magic)
-        .then(prosperous_constellations)
-        .run(&mut backend);
-
-    println!("Hello, world! {:?}", backend);
-}
-fn main() {
-    not_main()
-}
 
 /*
  ok so rough structure of chargen

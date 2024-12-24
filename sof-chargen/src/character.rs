@@ -1,6 +1,8 @@
 use enum_map::EnumMap;
+use serde::{Deserializer, Serializer};
+use std::fmt;
 
-#[derive(Debug, Enum, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Enum, Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Stat {
     Arms,
     Block,
@@ -52,7 +54,7 @@ impl Stat {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct Character {
     pub stats: EnumMap<Stat, i8>,
 }

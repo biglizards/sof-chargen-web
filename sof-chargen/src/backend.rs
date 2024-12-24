@@ -2,7 +2,11 @@ use crate::character::{Character, Stat};
 use std::fmt;
 
 pub trait Backend {
-    fn choose<T: Copy + fmt::Display>(&self, description: &str, options: &Vec<T>) -> T;
+    fn choose<T: Copy + fmt::Display + Send + Sync>(
+        &self,
+        description: &str,
+        options: &Vec<T>,
+    ) -> impl std::future::Future<Output = T> + Send;
     fn set_stat(&mut self, stat: Stat, new_val: i8);
     fn get_stat(&self, stat: Stat) -> i8;
     fn gain_trait(&mut self, description: &str);
@@ -13,7 +17,11 @@ pub struct BaseBackend {
 }
 
 impl Backend for BaseBackend {
-    fn choose<T: Copy + fmt::Display>(&self, description: &str, options: &Vec<T>) -> T {
+    async fn choose<T: Copy + fmt::Display + Send + Sync>(
+        &self,
+        description: &str,
+        options: &Vec<T>,
+    ) -> T {
         *options
             .first()
             .expect("attempted to choose from 0 options!")
