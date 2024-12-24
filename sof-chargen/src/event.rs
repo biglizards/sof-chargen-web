@@ -42,7 +42,7 @@ enum BuiltinEvent {
     ProsperousConstellations,
     PickStat,
     RollMagic,
-    RollLuck
+    RollLuck,
 }
 
 #[async_trait]
@@ -59,7 +59,6 @@ where
         }
     }
 }
-
 
 pub async fn prosperous_constellations<T: Backend>(backend: &mut T) {
     // reroll luck

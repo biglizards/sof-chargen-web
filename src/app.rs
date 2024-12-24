@@ -1,4 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
 use async_std::task;
+
 use egui::{Layout, RichText, Ui};
 use sof_chargen::{event, Backend, Character, Stat, CORE_STATS};
 use std::fmt;
@@ -14,11 +16,11 @@ where
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn spawn_thread<F: Future + Send>(callback: F)
+fn spawn_thread<F>(callback: F)
 where
-    F: Future<Output = ()> + 'static,
+    F: Future<Output = ()> + 'static + Future + Send,
 {
-    task::spawn(async { callback.await });
+    task::spawn(callback);
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.

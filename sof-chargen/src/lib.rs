@@ -9,7 +9,6 @@ mod character;
 mod dice;
 pub mod event;
 
-
 /*
  ok so rough structure of chargen
  - rolling core stats
