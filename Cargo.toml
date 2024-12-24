@@ -1,9 +1,8 @@
 [package]
-name = "eframe_template"
+name = "sof_chargen_web"
 version = "0.1.0"
-authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
 edition = "2021"
-include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
+include = ["LICENSE-MIT", "**/*.rs", "Cargo.toml"]
 rust-version = "1.81"
 
 [package.metadata.docs.rs]
@@ -18,8 +17,10 @@ eframe = { version = "0.30", default-features = false, features = [
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     "persistence",   # Enable restoring app state when restarting the app.
     "wayland",       # To support Linux (and CI)
+    "x11"
 ] }
 log = "0.4"
+sof-chargen = { path = "sof-chargen" }
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
