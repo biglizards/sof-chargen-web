@@ -1,21 +1,91 @@
+use egui::{Layout, RichText, Ui};
+use sof_chargen::{event, Backend, Character, Stat, CORE_STATS};
+use std::future::Future;
+use std::time::Duration;
+use std::{fmt, thread};
+use std::fmt::Display;
+use async_std::task;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::TryRecvError;
+use std::sync::{mpsc, Arc, RwLock};
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_thread<F: Future>(callback: F)
+where
+    F: Future<Output = ()> + 'static,
+{
+    wasm_bindgen_futures::spawn_local(callback);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn spawn_thread<F: Future + Send>(callback: F)
+where
+    F: Future<Output = ()> + 'static,
+{
+    task::spawn(async { callback.await });
+}
+
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct TemplateApp {
-    // Example stuff:
-    label: String,
+    #[serde(skip)]
+    backend: AppBackend,
 
-    #[serde(skip)] // This how you opt-out of serialization of a field
-    value: f32,
+    character: Arc<RwLock<Character>>,
+
+    choice: Vec<String>,
+
+    #[serde(skip)]
+    choice_vec: mpsc::Receiver<(Vec<String>, async_channel::Sender<usize>)>,
+    #[serde(skip)]
+    choice_send: Option<async_channel::Sender<usize>>,
+}
+
+#[derive(Clone)]
+struct AppBackend {
+    character: Arc<RwLock<Character>>,
+    choice_vec: mpsc::Sender<(Vec<String>, async_channel::Sender<usize>)>,
 }
 
 impl Default for TemplateApp {
     fn default() -> Self {
+        let (cv_s, cv_r) = mpsc::channel();
+        let character: Arc<RwLock<Character>> = Default::default();
         Self {
-            // Example stuff:
-            label: "Hello World!".to_owned(),
-            value: 2.7,
+            backend: AppBackend {
+                character: Arc::clone(&character),
+                choice_vec: cv_s,
+            },
+            character,
+            choice: Default::default(),
+            choice_vec: cv_r,
+            choice_send: Default::default(),
         }
+    }
+}
+
+impl Backend for AppBackend {
+    async fn choose<T: Copy + fmt::Display>(&self, description: &str, options: &Vec<T>) -> T {
+        let (s, r) = async_channel::bounded(1);
+        self.choice_vec
+            .send((options.iter().map(|x| x.to_string()).collect(), s))
+            .unwrap();
+        let choice = r.recv().await.unwrap();
+        options[choice]
+    }
+
+    fn set_stat(&mut self, stat: Stat, new_val: i8) {
+        self.character.write().unwrap().stats[stat] = new_val;
+    }
+    fn get_stat(&self, stat: Stat) -> i8 {
+        self.character.read().unwrap().stats[stat]
+    }
+
+    fn gain_trait(&mut self, description: &str) {
+        // just don't
+        // normally you'd prompt the user for input and store it somewhere
+        println!("{}", description)
     }
 }
 
@@ -28,23 +98,41 @@ impl TemplateApp {
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            let mut this: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+            this.backend.character = this.character.clone();
+            return this;
         }
 
         Default::default()
     }
+
+    fn stat_box(&self, ui: &mut Ui, stat: Stat) {
+        ui.horizontal(|ui| {
+            ui.vertical(|ui| {
+                ui.label(stat.to_string());
+                for subskill in stat.subskills() {
+                    ui.label(subskill.to_string());
+                }
+            });
+            ui.vertical(|ui| {
+                ui.label(self.backend.get_stat(stat).to_string());
+                for subskill in stat.subskills() {
+                    ui.label(self.backend.get_stat(subskill).to_string());
+                }
+            });
+        });
+    }
 }
 
 impl eframe::App for TemplateApp {
-    /// Called by the frame work to save state before shutdown.
+    /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
+        assert!(Arc::ptr_eq(&self.character, &self.backend.character));
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
@@ -65,45 +153,67 @@ impl eframe::App for TemplateApp {
             });
         });
 
+        if let Ok((vec, s)) = self.choice_vec.try_recv() {
+            self.choice = vec;
+            self.choice_send = Some(s);
+        }
+
+        if !self.choice.is_empty() {
+            egui::Window::new("Choice").show(ctx, |ui| {
+                let mut chosen = false;
+                for (i, option) in self.choice.iter().enumerate() {
+                    if ui.button(option).clicked() {
+                        let s = self.choice_send.as_mut().unwrap().clone();
+                        spawn_thread(async move {
+                            s.send(i).await.unwrap();
+                        });
+                        chosen = true;
+                    }
+                }
+                if chosen {
+                    self.choice = vec![];
+                }
+            });
+        }
+
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
-            ui.heading("eframe template");
+            ui.heading("SoF Chargen");
 
-            ui.horizontal(|ui| {
-                ui.label("Write something: ");
-                ui.text_edit_singleline(&mut self.label);
+            // add the core stats
+            ui.columns(5, |columns| {
+                for (i, &stat) in CORE_STATS.iter().enumerate() {
+                    self.stat_box(&mut columns[i], stat);
+                }
             });
 
-            ui.add(egui::Slider::new(&mut self.value, 0.0..=10.0).text("value"));
-            if ui.button("Increment").clicked() {
-                self.value += 1.0;
+            if ui.button("Generate column").clicked() {
+                let mut b = self.backend.clone();
+                spawn_thread(async move {
+                    event::pick_stat(&mut b).await;
+                });
+            }
+            if ui.button("Reset").clicked() {
+                *self.backend.character.write().unwrap() = Character {
+                    stats: Default::default(),
+                };
             }
 
             ui.separator();
 
-            ui.add(egui::github_link_file!(
-                "https://github.com/emilk/eframe_template/blob/main/",
-                "Source code."
-            ));
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                powered_by_egui_and_eframe(ui);
+            ui.with_layout(Layout::bottom_up(egui::Align::LEFT), |ui| {
+                disclaimer(ui);
                 egui::warn_if_debug_build(ui);
             });
         });
     }
 }
 
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
+fn disclaimer(ui: &mut egui::Ui) {
+    ui.label(
+        RichText::new("⚠ Not Official")
+            .small()
+            .color(ui.visuals().warn_fg_color),
+    )
+    .on_hover_text("For personal use only, not endorsed by Lys");
 }
