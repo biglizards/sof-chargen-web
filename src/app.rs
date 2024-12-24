@@ -82,12 +82,12 @@ impl Backend for AppBackend {
     }
 
     fn set_stat(&mut self, stat: Stat, new_val: i8) {
-        self.character.write().unwrap().stats[stat] = new_val;
-    }
-    fn get_stat(&self, stat: Stat) -> i8 {
-        self.character.read().unwrap().stats[stat]
+        self.character.write().unwrap().stats[stat] = Some(new_val);
     }
 
+    fn get_stat(&self, stat: Stat) -> Option<i8> {
+        self.character.read().unwrap().stats[stat]
+    }
     fn gain_trait(&mut self, description: &str) {
         // just don't
         // normally you'd prompt the user for input and store it somewhere
@@ -121,12 +121,19 @@ impl SoFCharGenApp {
                 }
             });
             ui.vertical(|ui| {
-                ui.label(self.backend.get_stat(stat).to_string());
+                ui.label(self.get_stat_str(stat));
                 for subskill in stat.subskills() {
-                    ui.label(self.backend.get_stat(subskill).to_string());
+                    ui.label(self.get_stat_str(subskill));
                 }
             });
         });
+    }
+
+    fn get_stat_str(&self, stat: Stat) -> String {
+        if let Some(v) = self.backend.get_stat(stat) {
+            return v.to_string();
+        }
+        "-".to_string()
     }
 }
 

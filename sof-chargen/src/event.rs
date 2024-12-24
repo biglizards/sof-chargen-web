@@ -69,7 +69,7 @@ pub async fn prosperous_constellations<T: Backend>(backend: &mut T) {
         backend
             .choose(
                 "Choose either luck value",
-                &vec![backend.get_stat(Stat::Luck), new_luck],
+                &vec![backend.get_stat(Stat::Luck).unwrap_or_default(), new_luck],
             )
             .await,
     );
@@ -83,14 +83,14 @@ pub async fn pick_stat<T: Backend>(backend: &mut T) {
             "Pick which stat to generate next",
             &CORE_STATS
                 .iter()
-                .filter(|&&x| backend.get_stat(x) == 0)
+                .filter(|&&x| backend.get_stat(x).is_none())
                 .collect(),
         )
         .await;
     let roll = dice::d100_disadvantage(
         (2 + CORE_STATS
             .iter()
-            .filter(|&&x| backend.get_stat(x) >= 50)
+            .filter(|&&x| backend.get_stat(x).is_some_and(|x| x >= 50))
             .count()) as i8,
     );
     backend.set_stat(choice, roll);
