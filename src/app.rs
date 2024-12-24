@@ -1,12 +1,8 @@
+use async_std::task;
 use egui::{Layout, RichText, Ui};
 use sof_chargen::{event, Backend, Character, Stat, CORE_STATS};
+use std::fmt;
 use std::future::Future;
-use std::time::Duration;
-use std::{fmt, thread};
-use std::fmt::Display;
-use async_std::task;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::TryRecvError;
 use std::sync::{mpsc, Arc, RwLock};
 
 #[cfg(target_arch = "wasm32")]
@@ -37,7 +33,7 @@ pub struct TemplateApp {
     choice: Vec<String>,
 
     #[serde(skip)]
-    choice_vec: mpsc::Receiver<(Vec<String>, async_channel::Sender<usize>)>,
+    choice_vec: mpsc::Receiver<(String, Vec<String>, async_channel::Sender<usize>)>,
     #[serde(skip)]
     choice_send: Option<async_channel::Sender<usize>>,
 }
@@ -45,7 +41,7 @@ pub struct TemplateApp {
 #[derive(Clone)]
 struct AppBackend {
     character: Arc<RwLock<Character>>,
-    choice_vec: mpsc::Sender<(Vec<String>, async_channel::Sender<usize>)>,
+    choice_vec: mpsc::Sender<(String, Vec<String>, async_channel::Sender<usize>)>,
 }
 
 impl Default for TemplateApp {
@@ -69,7 +65,11 @@ impl Backend for AppBackend {
     async fn choose<T: Copy + fmt::Display>(&self, description: &str, options: &Vec<T>) -> T {
         let (s, r) = async_channel::bounded(1);
         self.choice_vec
-            .send((options.iter().map(|x| x.to_string()).collect(), s))
+            .send((
+                description.to_string(),
+                options.iter().map(|x| x.to_string()).collect(),
+                s,
+            ))
             .unwrap();
         let choice = r.recv().await.unwrap();
         options[choice]
@@ -153,7 +153,7 @@ impl eframe::App for TemplateApp {
             });
         });
 
-        if let Ok((vec, s)) = self.choice_vec.try_recv() {
+        if let Ok((_desc, vec, s)) = self.choice_vec.try_recv() {
             self.choice = vec;
             self.choice_send = Some(s);
         }
