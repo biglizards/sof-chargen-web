@@ -21,15 +21,12 @@ where
 }
 
 #[allow(dead_code)]
-struct FileEvent<T> {
-    sub_events: Vec<Box<dyn Event<T> + Sync>>,
+pub struct FileEvent<T> {
+    pub sub_events: Vec<Box<dyn Event<T> + Sync + Send>>,
 }
 
 #[async_trait]
-impl<T: Backend + Send + Sync> Event<T> for FileEvent<T>
-where
-    dyn Event<T>: Send,
-{
+impl<T: Backend + Send + Sync> Event<T> for FileEvent<T> {
     async fn run(&self, backend: &mut T) {
         for event in self.sub_events.iter() {
             event.run(backend).await
@@ -46,10 +43,7 @@ enum BuiltinEvent {
 }
 
 #[async_trait]
-impl<T: Backend + Send + Sync> Event<T> for BuiltinEvent
-where
-    dyn Event<T>: Send,
-{
+impl<T: Backend + Send + Sync> Event<T> for BuiltinEvent {
     async fn run(&self, backend: &mut T) {
         match self {
             BuiltinEvent::ProsperousConstellations => prosperous_constellations(backend).await,
