@@ -7,6 +7,7 @@ use sof_chargen::{event, Backend, Character, Stat, CORE_STATS};
 use std::fmt;
 use std::future::Future;
 use std::sync::{mpsc, Arc, RwLock};
+use egui::os::OperatingSystem;
 
 #[cfg(target_arch = "wasm32")]
 fn spawn_thread<F: Future>(callback: F)
@@ -121,6 +122,13 @@ impl SoFCharGenApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
+        cc.egui_ctx.set_zoom_factor(match cc.egui_ctx.os() {
+            // mobile screens are smaller, so don't zoom
+            OperatingSystem::Android | OperatingSystem::IOS => 1.0,
+            // desktop screens have enough real estate for this
+            _ => 2.0
+        });
 
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
