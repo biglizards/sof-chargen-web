@@ -1,5 +1,4 @@
 use enum_map::EnumMap;
-use serde::{Deserializer, Serializer};
 use std::fmt;
 
 #[derive(Debug, Enum, Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

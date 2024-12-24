@@ -1,10 +1,8 @@
 #[macro_use]
 extern crate enum_map;
 
-use crate::event::*;
 pub use backend::Backend;
 pub use character::{Character, Stat, CORE_STATS};
-use event::Event;
 
 mod backend;
 mod character;

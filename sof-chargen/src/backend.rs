@@ -19,7 +19,7 @@ pub struct BaseBackend {
 impl Backend for BaseBackend {
     async fn choose<T: Copy + fmt::Display + Send + Sync>(
         &self,
-        description: &str,
+        _description: &str,
         options: &Vec<T>,
     ) -> T {
         *options

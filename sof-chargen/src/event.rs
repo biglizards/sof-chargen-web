@@ -3,7 +3,6 @@ use crate::character::{Stat, CORE_STATS};
 use crate::dice;
 use crate::dice::d100;
 use async_trait::async_trait;
-use std::future::IntoFuture;
 
 #[async_trait]
 pub trait Event<T: Backend> {
@@ -21,6 +20,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 struct FileEvent<T> {
     sub_events: Vec<Box<dyn Event<T> + Sync>>,
 }
@@ -37,6 +37,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 enum BuiltinEvent {
     ProsperousConstellations,
     PickStat,
