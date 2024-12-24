@@ -9,7 +9,7 @@ pub trait Backend {
     ) -> impl std::future::Future<Output = T> + Send;
     fn set_stat(&mut self, stat: Stat, new_val: i8);
     fn get_stat(&self, stat: Stat) -> Option<i8>;
-    fn gain_trait(&mut self, description: &str);
+    fn gain_trait(&mut self, description: &str) -> impl std::future::Future<Output = ()> + Send;
 }
 #[derive(Debug, Default)]
 pub struct BaseBackend {
@@ -34,7 +34,7 @@ impl Backend for BaseBackend {
         self.character.stats[stat]
     }
 
-    fn gain_trait(&mut self, description: &str) {
+    async fn gain_trait(&mut self, description: &str) {
         // just don't
         // normally you'd prompt the user for input and store it somewhere
         println!("{}", description)

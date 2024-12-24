@@ -42,28 +42,45 @@ pub struct SoFCharGenApp {
     choice_vec: mpsc::Receiver<(String, Vec<String>, async_channel::Sender<usize>)>,
     #[serde(skip)]
     choice_send: Option<async_channel::Sender<usize>>,
+
+    // it really feels like there should be a less verbose way of representing this idiom
+    #[serde(skip)]
+    trait_read: mpsc::Receiver<(String, async_channel::Sender<String>)>,
+    #[serde(skip)]
+    trait_description: String,
+    #[serde(skip)]
+    trait_submission: String,
+    #[serde(skip)]
+    trait_sender: Option<async_channel::Sender<String>>,
 }
 
 #[derive(Clone)]
 struct AppBackend {
     character: Arc<RwLock<Character>>,
     choice_vec: mpsc::Sender<(String, Vec<String>, async_channel::Sender<usize>)>,
+    trait_send: mpsc::Sender<(String, async_channel::Sender<String>)>,
 }
 
 impl Default for SoFCharGenApp {
     fn default() -> Self {
         let (cv_s, cv_r) = mpsc::channel();
+        let (t_s, t_r) = mpsc::channel();
         let character: Arc<RwLock<Character>> = Default::default();
         Self {
             backend: AppBackend {
                 character: Arc::clone(&character),
                 choice_vec: cv_s,
+                trait_send: t_s,
             },
             character,
             choice: Default::default(),
             choice_description: Default::default(),
             choice_vec: cv_r,
             choice_send: Default::default(),
+            trait_read: t_r,
+            trait_description: Default::default(),
+            trait_submission: Default::default(),
+            trait_sender: Default::default(),
         }
     }
 }
@@ -89,10 +106,13 @@ impl Backend for AppBackend {
     fn get_stat(&self, stat: Stat) -> Option<i8> {
         self.character.read().unwrap().stats[stat]
     }
-    fn gain_trait(&mut self, description: &str) {
-        // just don't
-        // normally you'd prompt the user for input and store it somewhere
-        println!("{}", description)
+    async fn gain_trait(&mut self, description: &str) {
+        let (s, r) = async_channel::bounded(1);
+        self.trait_send.send((description.to_string(), s)).unwrap();
+        let thing = r.recv().await.unwrap();
+        {
+            self.character.write().unwrap().traits.push(thing);
+        }
     }
 }
 
@@ -162,13 +182,40 @@ impl eframe::App for SoFCharGenApp {
             });
         });
 
+        // check the buffers to see if we've been sent any interaction requests from events
         if let Ok((desc, vec, s)) = self.choice_vec.try_recv() {
             self.choice = vec;
             self.choice_send = Some(s);
             self.choice_description = desc;
         }
+        if let Ok((desc, s)) = self.trait_read.try_recv() {
+            self.trait_description = desc;
+            self.trait_sender = Some(s);
+            self.trait_submission = String::new();
+        }
 
-        // render the choice window
+        /*************************
+           Interaction Window
+        *************************/
+
+        // if we're requesting a trait, put that up in front of the choice buttons
+        if !self.trait_description.is_empty() {
+            egui::Window::new("Gain a Trait").show(ctx, |ui| {
+                ui.label(&self.trait_description);
+                ui.text_edit_multiline(&mut self.trait_submission);
+                if ui.button("Submit").clicked() {
+                    let s = self.trait_sender.as_mut().unwrap().clone();
+                    let submission = self.trait_submission.clone();
+                    spawn_thread(async move {
+                        s.send(submission).await.unwrap();
+                    });
+                    self.trait_sender = None;
+                    self.trait_description = String::new();
+                    self.trait_submission = String::new();
+                }
+            });
+        }
+
         if !self.choice.is_empty() {
             egui::Window::new("Choice").show(ctx, |ui| {
                 let mut chosen = false;
@@ -190,6 +237,9 @@ impl eframe::App for SoFCharGenApp {
             });
         }
 
+        /********************
+          Character Sheet
+        ********************/
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("SoF Chargen");
@@ -211,6 +261,22 @@ impl eframe::App for SoFCharGenApp {
 
             ui.separator();
 
+            // add all the traits
+            let traits = &self.backend.character.read().unwrap().traits;
+            if !traits.is_empty() {
+                ui.label("Traits");
+            }
+            ui.columns(traits.len(), |columns| {
+                for (i, str) in traits.iter().enumerate() {
+                    columns[i].label(str);
+                }
+            });
+
+            ui.separator();
+
+            /********************
+                Magic Buttons
+            ********************/
             if ui.button("Generate Core Stats").clicked() {
                 let mut b = self.backend.clone();
                 spawn_thread(async move {
@@ -228,7 +294,14 @@ impl eframe::App for SoFCharGenApp {
                 *self.backend.character.write().unwrap() = Character {
                     stats: Default::default(),
                     name: "Enter Name".to_string(),
+                    traits: vec![],
                 };
+            }
+            if ui.button("Pick a Star").clicked() {
+                let mut b = self.backend.clone();
+                spawn_thread(async move {
+                    event::prosperous_constellations(&mut b).await;
+                });
             }
 
             ui.separator();

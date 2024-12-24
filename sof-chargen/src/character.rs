@@ -57,4 +57,5 @@ impl Stat {
 pub struct Character {
     pub stats: EnumMap<Stat, Option<i8>>,
     pub name: String,
+    pub traits: Vec<String>,
 }

@@ -68,7 +68,9 @@ pub async fn prosperous_constellations<T: Backend>(backend: &mut T) {
             .await,
     );
 
-    backend.gain_trait("gain a trait related to arrogance, vanity or overconfidence")
+    backend
+        .gain_trait("gain a trait related to arrogance, vanity or overconfidence")
+        .await
 }
 
 pub async fn pick_stat<T: Backend>(backend: &mut T) {
