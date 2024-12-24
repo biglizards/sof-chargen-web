@@ -20,7 +20,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "SoF Chargen",
         native_options,
-        Box::new(|cc| Ok(Box::new(sof_chargen_web::TemplateApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(sof_chargen_web::SoFCharGenApp::new(cc)))),
     )
 }
 
@@ -50,7 +50,7 @@ fn main() {
             .start(
                 canvas,
                 web_options,
-                Box::new(|cc| Ok(Box::new(sof_chargen_web::TemplateApp::new(cc)))),
+                Box::new(|cc| Ok(Box::new(sof_chargen_web::SoFCharGenApp::new(cc)))),
             )
             .await;
 

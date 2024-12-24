@@ -26,13 +26,16 @@ where
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct TemplateApp {
+pub struct SoFCharGenApp {
     #[serde(skip)]
     backend: AppBackend,
 
     character: Arc<RwLock<Character>>,
 
+    #[serde(skip)]
     choice: Vec<String>,
+    #[serde(skip)]
+    choice_description: String,
 
     #[serde(skip)]
     choice_vec: mpsc::Receiver<(String, Vec<String>, async_channel::Sender<usize>)>,
@@ -46,7 +49,7 @@ struct AppBackend {
     choice_vec: mpsc::Sender<(String, Vec<String>, async_channel::Sender<usize>)>,
 }
 
-impl Default for TemplateApp {
+impl Default for SoFCharGenApp {
     fn default() -> Self {
         let (cv_s, cv_r) = mpsc::channel();
         let character: Arc<RwLock<Character>> = Default::default();
@@ -57,6 +60,7 @@ impl Default for TemplateApp {
             },
             character,
             choice: Default::default(),
+            choice_description: Default::default(),
             choice_vec: cv_r,
             choice_send: Default::default(),
         }
@@ -91,7 +95,7 @@ impl Backend for AppBackend {
     }
 }
 
-impl TemplateApp {
+impl SoFCharGenApp {
     /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
@@ -126,12 +130,7 @@ impl TemplateApp {
     }
 }
 
-impl eframe::App for TemplateApp {
-    /// Called by the framework to save state before shutdown.
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
-    }
-
+impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         assert!(Arc::ptr_eq(&self.character, &self.backend.character));
@@ -155,23 +154,28 @@ impl eframe::App for TemplateApp {
             });
         });
 
-        if let Ok((_desc, vec, s)) = self.choice_vec.try_recv() {
+        if let Ok((desc, vec, s)) = self.choice_vec.try_recv() {
             self.choice = vec;
             self.choice_send = Some(s);
+            self.choice_description = desc;
         }
 
+        // render the choice window
         if !self.choice.is_empty() {
             egui::Window::new("Choice").show(ctx, |ui| {
                 let mut chosen = false;
-                for (i, option) in self.choice.iter().enumerate() {
-                    if ui.button(option).clicked() {
-                        let s = self.choice_send.as_mut().unwrap().clone();
-                        spawn_thread(async move {
-                            s.send(i).await.unwrap();
-                        });
-                        chosen = true;
+                ui.label(&self.choice_description);
+                ui.horizontal(|ui| {
+                    for (i, option) in self.choice.iter().enumerate() {
+                        if ui.button(option).clicked() {
+                            let s = self.choice_send.as_mut().unwrap().clone();
+                            spawn_thread(async move {
+                                s.send(i).await.unwrap();
+                            });
+                            chosen = true;
+                        }
                     }
-                }
+                });
                 if chosen {
                     self.choice = vec![];
                 }
@@ -208,6 +212,11 @@ impl eframe::App for TemplateApp {
                 egui::warn_if_debug_build(ui);
             });
         });
+    }
+
+    /// Called by the framework to save state before shutdown.
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, eframe::APP_KEY, self);
     }
 }
 
