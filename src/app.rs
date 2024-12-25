@@ -1,6 +1,7 @@
 use backend::AppBackend;
 use egui::os::OperatingSystem;
 use sof_chargen::{Backend, Character, Stat};
+use std::cell::RefCell;
 use std::sync::{mpsc, Arc, RwLock};
 
 mod backend;
@@ -14,6 +15,8 @@ pub struct SoFCharGenApp {
     backend: AppBackend,
 
     character: Arc<RwLock<Character>>,
+    log: RefCell<String>,
+    tab: AppTab,
 
     #[serde(skip)]
     choice: Vec<String>,
@@ -48,6 +51,8 @@ impl Default for SoFCharGenApp {
                 trait_send: t_s,
             },
             character,
+            log: Default::default(),
+            tab: AppTab::Sheet,
             choice: Default::default(),
             choice_description: Default::default(),
             choice_vec: cv_r,
@@ -87,11 +92,13 @@ impl SoFCharGenApp {
     fn check_channels(&mut self) {
         // check the buffers to see if we've been sent any interaction requests from events
         if let Ok((desc, vec, s)) = self.choice_vec.try_recv() {
+            self.log(&desc);
             self.choice = vec;
             self.choice_send = Some(s);
             self.choice_description = desc;
         }
         if let Ok((desc, s)) = self.trait_read.try_recv() {
+            self.log(&desc);
             self.trait_description = desc;
             self.trait_sender = Some(s);
             self.trait_submission = String::new();
@@ -103,6 +110,14 @@ impl SoFCharGenApp {
             return v.to_string();
         }
         "-".to_string()
+    }
+
+    fn log(&self, str: &str) {
+        self.log.borrow_mut().push('\n');
+        self.log.borrow_mut().push_str(str);
+    }
+    fn reset_log(&self) {
+        self.log.borrow_mut().clear()
     }
 }
 
@@ -117,4 +132,10 @@ impl eframe::App for SoFCharGenApp {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+enum AppTab {
+    Sheet,
+    DEMode,
 }

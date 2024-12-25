@@ -1,4 +1,5 @@
 use crate::app::backend::AppBackend;
+use crate::app::AppTab;
 use crate::{util, SoFCharGenApp};
 use egui::{Layout, RichText, Ui};
 use sof_chargen::event::{roll_core_stats, Event};
@@ -22,45 +23,54 @@ impl SoFCharGenApp {
         });
     }
 
+    fn trait_buttons(&mut self, ui: &mut Ui) {
+        ui.text_edit_multiline(&mut self.trait_submission);
+        if ui.button("Submit").clicked() {
+            let s = self.trait_sender.as_mut().unwrap().clone();
+            let submission = self.trait_submission.clone();
+            util::spawn_thread(async move {
+                s.send(submission).await.unwrap();
+            });
+            self.trait_sender = None;
+            self.trait_description = String::new();
+            self.trait_submission = String::new();
+        }
+    }
+
     fn trait_window(&mut self, ctx: &egui::Context) {
         // if we're requesting a trait, put that up in front of the choice buttons
         if !self.trait_description.is_empty() {
             egui::Window::new("Gain a Trait").show(ctx, |ui| {
                 ui.label(&self.trait_description);
-                ui.text_edit_multiline(&mut self.trait_submission);
-                if ui.button("Submit").clicked() {
-                    let s = self.trait_sender.as_mut().unwrap().clone();
-                    let submission = self.trait_submission.clone();
-                    util::spawn_thread(async move {
-                        s.send(submission).await.unwrap();
-                    });
-                    self.trait_sender = None;
-                    self.trait_description = String::new();
-                    self.trait_submission = String::new();
-                }
+                self.trait_buttons(ui);
             });
+        }
+    }
+
+    fn choice_buttons(&mut self, ui: &mut Ui) {
+        let mut chosen = false;
+        ui.horizontal(|ui| {
+            for (i, option) in self.choice.iter().enumerate() {
+                if ui.button(option).clicked() {
+                    let s = self.choice_send.as_mut().unwrap().clone();
+                    util::spawn_thread(async move {
+                        s.send(i).await.unwrap();
+                    });
+                    chosen = true;
+                    self.log(option);
+                }
+            }
+        });
+        if chosen {
+            self.choice = vec![];
+            self.choice_send = None;
         }
     }
     fn choice_window(&mut self, ctx: &egui::Context) {
         if !self.choice.is_empty() {
             egui::Window::new("Choice").show(ctx, |ui| {
-                let mut chosen = false;
                 ui.label(&self.choice_description);
-                ui.horizontal(|ui| {
-                    for (i, option) in self.choice.iter().enumerate() {
-                        if ui.button(option).clicked() {
-                            let s = self.choice_send.as_mut().unwrap().clone();
-                            util::spawn_thread(async move {
-                                s.send(i).await.unwrap();
-                            });
-                            chosen = true;
-                        }
-                    }
-                });
-                if chosen {
-                    self.choice = vec![];
-                    self.choice_send = None;
-                }
+                self.choice_buttons(ui);
             });
         }
     }
@@ -120,6 +130,7 @@ impl SoFCharGenApp {
                 name: "Enter Name".to_string(),
                 traits: vec![],
             };
+            self.reset_log();
         }
         if ui.button("Pick a Star").clicked() {
             let mut b = self.backend.clone();
@@ -130,14 +141,7 @@ impl SoFCharGenApp {
         ui.separator();
     }
 
-    pub fn render(&mut self, ctx: &egui::Context) {
-        render_top_panel(ctx);
-
-        self.check_channels();
-
-        self.trait_window(ctx);
-        self.choice_window(ctx);
-
+    fn render_sheet(&self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("SoF Chargen");
@@ -155,15 +159,58 @@ impl SoFCharGenApp {
             });
         });
     }
-}
-fn render_top_panel(ctx: &egui::Context) {
-    egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-        // The top panel is often a good place for a menu bar:
 
-        egui::menu::bar(ui, |ui| {
-            egui::widgets::global_theme_preference_buttons(ui);
+    fn render_log(&mut self, ctx: &egui::Context) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical()
+                .stick_to_bottom(true)
+                .show(ui, |ui| {
+                    ui.with_layout(Layout::top_down_justified(egui::Align::LEFT), |ui| {
+                        ui.label(&*self.log.borrow());
+                    });
+                    if !self.trait_description.is_empty() {
+                        self.trait_buttons(ui);
+                    } else if !self.choice.is_empty() {
+                        self.choice_buttons(ui);
+                    }
+                });
         });
-    });
+    }
+
+    pub fn render(&mut self, ctx: &egui::Context) {
+        self.tab = self.render_top_panel(ctx);
+
+        self.check_channels();
+
+        match self.tab {
+            AppTab::Sheet => {
+                self.trait_window(ctx);
+                self.choice_window(ctx);
+                self.render_sheet(ctx);
+            }
+            AppTab::DEMode => self.render_log(ctx),
+        }
+    }
+
+    fn render_top_panel(&self, ctx: &egui::Context) -> AppTab {
+        egui::TopBottomPanel::top("top_panel")
+            .show(ctx, |ui| {
+                // The top panel is often a good place for a menu bar:
+
+                egui::menu::bar(ui, |ui| {
+                    egui::widgets::global_theme_preference_buttons(ui);
+                    if ui.button("📝 Sheet").clicked() {
+                        return AppTab::Sheet;
+                    }
+                    if ui.button("🔎 DE Mode").clicked() {
+                        return AppTab::DEMode;
+                    }
+                    self.tab
+                })
+                .inner
+            })
+            .inner
+    }
 }
 
 fn disclaimer(ui: &mut egui::Ui) {
