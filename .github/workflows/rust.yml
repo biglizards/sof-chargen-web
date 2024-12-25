@@ -162,6 +162,6 @@ jobs:
         repo_token: ${{ secrets.GITHUB_TOKEN }}
         file: sof_chargen_web-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
         asset_name: sof_chargen_web-${{ matrix.TARGET }}${{ matrix.EXTENSION }}
-        tag: ${{ github.ref }}
+        tag: ${{ github.ref }}-release
         prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
         overwrite: true
