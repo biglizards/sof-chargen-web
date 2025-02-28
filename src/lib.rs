@@ -2,5 +2,6 @@
 
 mod app;
 mod util;
+mod ipc;
 
 pub use app::SoFCharGenApp;

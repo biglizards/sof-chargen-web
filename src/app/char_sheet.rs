@@ -1,11 +1,36 @@
-use crate::app::backend::AppBackend;
+use crate::SoFCharGenApp;
 use crate::app::AppTab;
-use crate::{util, SoFCharGenApp};
 use egui::{Layout, RichText, Ui};
-use sof_chargen::event::{roll_core_stats, Event};
-use sof_chargen::{event, Character, Stat, CORE_STATS};
+use sof_chargen::ipc::Choice;
+use sof_chargen::ipc::Selection;
+use sof_chargen::{CORE_STATS, Character, Stat, event};
 
 impl SoFCharGenApp {
+    fn choose(&self, i: usize) {
+        match &self.current_event {
+            None => {}
+            Some(t) => t.choose(i),
+        }
+    }
+
+    fn submit_trait(&mut self) {
+        if let Some(t) = &self.current_event {
+            self.log_choice(&self.trait_submission);
+            t.submit_trait(std::mem::take(&mut self.trait_submission));
+        }
+    }
+
+    fn poll_current_choice(&mut self) {
+        if self.current_event.is_some() {
+            self.current_choice = self
+                .current_event
+                .as_ref()
+                .unwrap()
+                .current_choice()
+                .clone()
+        }
+    }
+
     fn stat_box(&self, ui: &mut Ui, stat: Stat) {
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
@@ -26,51 +51,36 @@ impl SoFCharGenApp {
     fn trait_buttons(&mut self, ui: &mut Ui) {
         ui.text_edit_multiline(&mut self.trait_submission);
         if ui.button("Submit").clicked() {
-            let s = self.trait_sender.as_mut().unwrap().clone();
-            let submission = self.trait_submission.clone();
-            util::spawn_thread(async move {
-                s.send(submission).await.unwrap();
-            });
-            self.trait_sender = None;
-            self.trait_description = String::new();
-            self.trait_submission = String::new();
+            self.submit_trait();
         }
     }
 
     fn trait_window(&mut self, ctx: &egui::Context) {
         // if we're requesting a trait, put that up in front of the choice buttons
-        if !self.trait_description.is_empty() {
+        if let Some(Choice::String(t)) = &self.current_choice {
             egui::Window::new("Gain a Trait").show(ctx, |ui| {
-                ui.label(&self.trait_description);
+                ui.label(&*t.description);
                 self.trait_buttons(ui);
             });
         }
     }
 
-    fn choice_buttons(&mut self, ui: &mut Ui) {
-        let mut chosen = false;
+    fn choice_buttons(&self, ui: &mut Ui, choice: &Selection) {
         ui.horizontal(|ui| {
-            for (i, option) in self.choice.iter().enumerate() {
-                if ui.button(option).clicked() {
-                    let s = self.choice_send.as_mut().unwrap().clone();
-                    util::spawn_thread(async move {
-                        s.send(i).await.unwrap();
-                    });
-                    chosen = true;
-                    self.log(option);
+            for (i, option) in choice.options.iter().enumerate() {
+                let as_str = format!("{:?}", option);
+                if ui.button(&as_str).clicked() {
+                    self.choose(i);
+                    self.log_choice(&as_str);
                 }
             }
         });
-        if chosen {
-            self.choice = vec![];
-            self.choice_send = None;
-        }
     }
-    fn choice_window(&mut self, ctx: &egui::Context) {
-        if !self.choice.is_empty() {
+    fn choice_window(&self, ctx: &egui::Context) {
+        if let Some(Choice::Selection(s)) = &self.current_choice {
             egui::Window::new("Choice").show(ctx, |ui| {
-                ui.label(&self.choice_description);
-                self.choice_buttons(ui);
+                ui.label(s.description);
+                self.choice_buttons(ui, s);
             });
         }
     }
@@ -78,7 +88,7 @@ impl SoFCharGenApp {
     fn stats(&self, ui: &mut egui::Ui) {
         // first row: name, [blank], luck, magic
         ui.columns(4, |columns| {
-            columns[0].text_edit_singleline(&mut self.character.write().unwrap().name);
+            columns[0].text_edit_singleline(&mut self.character.borrow_mut().name);
             // luck and magic
             columns[2].label(format!("Magic: {}", self.get_stat_str(Stat::Magic)));
             columns[3].label(format!("Luck: {}", self.get_stat_str(Stat::Luck)));
@@ -96,7 +106,7 @@ impl SoFCharGenApp {
 
     fn traits(&self, ui: &mut egui::Ui) {
         // add all the traits
-        let traits = &self.backend.character.read().unwrap().traits;
+        let traits = &self.backend.character.borrow().traits;
         if !traits.is_empty() {
             ui.label("Traits");
         }
@@ -110,22 +120,16 @@ impl SoFCharGenApp {
         }
     }
 
-    fn debug_buttons(&self, ui: &mut egui::Ui) {
+    fn debug_buttons(&mut self, ui: &mut egui::Ui) {
         if ui.button("Generate Core Stats").clicked() {
-            let mut b = self.backend.clone();
-            util::spawn_thread(async move {
-                roll_core_stats::<AppBackend>().run(&mut b).await;
-            });
+            self.current_event = Some(event::roll_core_stats(self.backend.clone()).into());
         }
         if ui.button("Roll Magic and Luck").clicked() {
-            let mut b = self.backend.clone();
-            util::spawn_thread(async move {
-                event::roll_magic(&mut b).await;
-                event::roll_luck(&mut b).await;
-            });
+            event::roll_magic(&mut self.backend);
+            event::roll_luck(&mut self.backend);
         }
         if ui.button("Reset").clicked() {
-            *self.backend.character.write().unwrap() = Character {
+            *self.backend.character.borrow_mut() = Character {
                 stats: Default::default(),
                 name: "Enter Name".to_string(),
                 traits: vec![],
@@ -133,15 +137,13 @@ impl SoFCharGenApp {
             self.reset_log();
         }
         if ui.button("Pick a Star").clicked() {
-            let mut b = self.backend.clone();
-            util::spawn_thread(async move {
-                event::prosperous_constellations(&mut b).await;
-            });
+            self.current_event =
+                Some(event::prosperous_constellations(self.backend.clone()).into());
         }
         ui.separator();
     }
 
-    fn render_sheet(&self, ctx: &egui::Context) {
+    fn render_sheet(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             // The central panel the region left after adding TopPanel's and SidePanel's
             ui.heading("SoF Chargen");
@@ -168,19 +170,25 @@ impl SoFCharGenApp {
                     ui.with_layout(Layout::top_down_justified(egui::Align::LEFT), |ui| {
                         ui.label(&*self.log.borrow());
                     });
-                    if !self.trait_description.is_empty() {
-                        self.trait_buttons(ui);
-                    } else if !self.choice.is_empty() {
-                        self.choice_buttons(ui);
+                    match &self.current_choice {
+                        Some(Choice::String(t)) => {
+                            ui.label(t.description);
+                            self.trait_buttons(ui);
+                        }
+                        Some(Choice::Selection(s)) => {
+                            ui.label(s.description);
+                            self.choice_buttons(ui, s);
+                        }
+                        _ => {}
                     }
                 });
         });
     }
 
     pub fn render(&mut self, ctx: &egui::Context) {
-        self.tab = self.render_top_panel(ctx);
+        self.poll_current_choice();
 
-        self.check_channels();
+        self.tab = self.render_top_panel(ctx);
 
         match self.tab {
             AppTab::Sheet => {

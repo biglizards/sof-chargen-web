@@ -1,41 +1,26 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use sof_chargen::{Backend, Character, Stat};
-use std::fmt;
-use std::sync::{mpsc, Arc, RwLock};
+use sof_chargen::dice::Roll;
 
 #[derive(Clone)]
 pub struct AppBackend {
-    pub character: Arc<RwLock<Character>>,
-    pub choice_vec: mpsc::Sender<(String, Vec<String>, async_channel::Sender<usize>)>,
-    pub trait_send: mpsc::Sender<(String, async_channel::Sender<String>)>,
+    pub character: Rc<RefCell<Character>>,
 }
 
 impl Backend for AppBackend {
-    async fn choose<T: Copy + fmt::Display>(&self, description: &str, options: &Vec<T>) -> T {
-        let (s, r) = async_channel::bounded(1);
-        self.choice_vec
-            .send((
-                description.to_string(),
-                options.iter().map(|x| x.to_string()).collect(),
-                s,
-            ))
-            .unwrap();
-        let choice = r.recv().await.unwrap();
-        options[choice]
-    }
-
     fn set_stat(&mut self, stat: Stat, new_val: i8) {
-        self.character.write().unwrap().stats[stat] = Some(new_val);
+        self.character.borrow_mut().stats[stat] = Some(new_val);
     }
 
-    fn get_stat(&self, stat: Stat) -> Option<i8> {
-        self.character.read().unwrap().stats[stat]
+    fn set_stat_by_roll(&mut self, stat: Stat, roll: &Roll) {
+        self.set_stat(stat, roll.result());
     }
-    async fn gain_trait(&mut self, description: &str) {
-        let (s, r) = async_channel::bounded(1);
-        self.trait_send.send((description.to_string(), s)).unwrap();
-        let thing = r.recv().await.unwrap();
-        {
-            self.character.write().unwrap().traits.push(thing);
-        }
+    fn get_stat(&self, stat: Stat) -> Option<i8> {
+        self.character.borrow().stats[stat]
+    }
+
+    fn gain_trait(&mut self, description: String) {
+        self.character.borrow_mut().traits.push(description);
     }
 }

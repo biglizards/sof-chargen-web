@@ -1,8 +1,10 @@
 use backend::AppBackend;
 use egui::os::OperatingSystem;
+use sof_chargen::event::Event;
+use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Character, Stat};
 use std::cell::RefCell;
-use std::sync::{mpsc, Arc, RwLock};
+use std::rc::Rc;
 
 mod backend;
 mod char_sheet;
@@ -14,53 +16,32 @@ pub struct SoFCharGenApp {
     #[serde(skip)]
     backend: AppBackend,
 
-    character: Arc<RwLock<Character>>,
+    character: Rc<RefCell<Character>>,
     log: RefCell<String>,
     tab: AppTab,
-
-    #[serde(skip)]
-    choice: Vec<String>,
-    #[serde(skip)]
-    choice_description: String,
-
-    #[serde(skip)]
-    choice_vec: mpsc::Receiver<(String, Vec<String>, async_channel::Sender<usize>)>,
-    #[serde(skip)]
-    choice_send: Option<async_channel::Sender<usize>>,
-
-    // it really feels like there should be a less verbose way of representing this idiom
-    #[serde(skip)]
-    trait_read: mpsc::Receiver<(String, async_channel::Sender<String>)>,
-    #[serde(skip)]
-    trait_description: String,
-    #[serde(skip)]
     trait_submission: String,
+
     #[serde(skip)]
-    trait_sender: Option<async_channel::Sender<String>>,
+    current_event: Option<Box<dyn Event>>,
+
+    #[serde(skip)]
+    // owned cache of the choice, to prevent excessive cloning
+    current_choice: Option<Choice>,
 }
 
 impl Default for SoFCharGenApp {
     fn default() -> Self {
-        let (cv_s, cv_r) = mpsc::channel();
-        let (t_s, t_r) = mpsc::channel();
-        let character: Arc<RwLock<Character>> = Default::default();
+        let character: Rc<RefCell<Character>> = Default::default();
         Self {
             backend: AppBackend {
-                character: Arc::clone(&character),
-                choice_vec: cv_s,
-                trait_send: t_s,
+                character: character.clone(),
             },
             character,
             log: Default::default(),
+            trait_submission: String::new(),
             tab: AppTab::Sheet,
-            choice: Default::default(),
-            choice_description: Default::default(),
-            choice_vec: cv_r,
-            choice_send: Default::default(),
-            trait_read: t_r,
-            trait_description: Default::default(),
-            trait_submission: Default::default(),
-            trait_sender: Default::default(),
+            current_event: None,
+            current_choice: None,
         }
     }
 }
@@ -89,22 +70,6 @@ impl SoFCharGenApp {
         Default::default()
     }
 
-    fn check_channels(&mut self) {
-        // check the buffers to see if we've been sent any interaction requests from events
-        if let Ok((desc, vec, s)) = self.choice_vec.try_recv() {
-            self.log(&desc);
-            self.choice = vec;
-            self.choice_send = Some(s);
-            self.choice_description = desc;
-        }
-        if let Ok((desc, s)) = self.trait_read.try_recv() {
-            self.log(&desc);
-            self.trait_description = desc;
-            self.trait_sender = Some(s);
-            self.trait_submission = String::new();
-        }
-    }
-
     fn get_stat_str(&self, stat: Stat) -> String {
         if let Some(v) = self.backend.get_stat(stat) {
             return v.to_string();
@@ -112,9 +77,24 @@ impl SoFCharGenApp {
         "-".to_string()
     }
 
-    fn log(&self, str: &str) {
-        self.log.borrow_mut().push('\n');
-        self.log.borrow_mut().push_str(str);
+    fn get_current_prompt(&self) -> Option<&'static str> {
+        match &self.current_choice {
+            None => None,
+            Some(o) => Some(o.description()),
+        }
+    }
+
+    fn log_choice(&self, choice: &str) {
+        let mut log = self.log.borrow_mut();
+        log.push('\n');
+
+        if let Some(description) = self.get_current_prompt() {
+            log.push_str(description)
+        } else {
+            log.push_str("[TRIED TO LOG CHOICE WITH NO PENDING CHOICE]")
+        }
+        log.push_str(": ");
+        log.push_str(choice);
     }
     fn reset_log(&self) {
         self.log.borrow_mut().clear()
@@ -124,7 +104,7 @@ impl SoFCharGenApp {
 impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        assert!(Arc::ptr_eq(&self.character, &self.backend.character));
+        assert!(Rc::ptr_eq(&self.character, &self.backend.character));
         self.render(ctx);
     }
 

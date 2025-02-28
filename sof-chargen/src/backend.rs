@@ -1,15 +1,13 @@
 use crate::character::{Character, Stat};
-use std::fmt;
+use crate::dice::Roll;
 
 pub trait Backend {
-    fn choose<T: Copy + fmt::Display + Send + Sync>(
-        &self,
-        description: &str,
-        options: &Vec<T>,
-    ) -> impl std::future::Future<Output = T> + Send;
     fn set_stat(&mut self, stat: Stat, new_val: i8);
+    fn set_stat_by_roll(&mut self, stat: Stat, roll: &Roll) {
+        self.set_stat(stat, roll.result())
+    }
     fn get_stat(&self, stat: Stat) -> Option<i8>;
-    fn gain_trait(&mut self, description: &str) -> impl std::future::Future<Output = ()> + Send;
+    fn gain_trait(&mut self, description: String);
 }
 #[derive(Debug, Default)]
 pub struct BaseBackend {
@@ -17,16 +15,6 @@ pub struct BaseBackend {
 }
 
 impl Backend for BaseBackend {
-    async fn choose<T: Copy + fmt::Display + Send + Sync>(
-        &self,
-        _description: &str,
-        options: &Vec<T>,
-    ) -> T {
-        *options
-            .first()
-            .expect("attempted to choose from 0 options!")
-    }
-
     fn set_stat(&mut self, stat: Stat, new_val: i8) {
         self.character.stats[stat] = Some(new_val);
     }
@@ -34,7 +22,7 @@ impl Backend for BaseBackend {
         self.character.stats[stat]
     }
 
-    async fn gain_trait(&mut self, description: &str) {
+    fn gain_trait(&mut self, description: String) {
         // just don't
         // normally you'd prompt the user for input and store it somewhere
         println!("{}", description)
