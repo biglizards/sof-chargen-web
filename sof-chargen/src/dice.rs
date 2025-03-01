@@ -43,7 +43,7 @@ pub fn d100_disadvantage(dice: i8) -> Roll {
     }
     let mut all_dice: Vec<i8> = (0..dice).map(|_| (d10() - 1) * 10).collect();
     let selected_dice = all_dice.iter().enumerate()
-        .max_by_key(|&(_, &v)| v)
+        .min_by_key(|&(_, &v)| v)
         .map(|(index, _)| index).unwrap();
 
     all_dice.push(d10());
