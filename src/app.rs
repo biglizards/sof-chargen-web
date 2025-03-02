@@ -1,7 +1,7 @@
+use crate::app::char_sheet::peek_choice;
 use backend::AppBackend;
 use egui::os::OperatingSystem;
 use sof_chargen::event::Event;
-use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Character, Stat};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -23,10 +23,6 @@ pub struct SoFCharGenApp {
 
     #[serde(skip)]
     current_event: Option<Box<dyn Event>>,
-
-    #[serde(skip)]
-    // owned cache of the choice, to prevent excessive cloning
-    current_choice: Option<Choice>,
 }
 
 impl Default for SoFCharGenApp {
@@ -41,7 +37,6 @@ impl Default for SoFCharGenApp {
             trait_submission: String::new(),
             tab: AppTab::Sheet,
             current_event: None,
-            current_choice: None,
         }
     }
 }
@@ -78,7 +73,7 @@ impl SoFCharGenApp {
     }
 
     fn get_current_prompt(&self) -> Option<&'static str> {
-        match &self.current_choice {
+        match peek_choice!(self) {
             None => None,
             Some(o) => Some(o.description()),
         }

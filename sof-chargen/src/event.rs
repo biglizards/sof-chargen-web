@@ -3,19 +3,24 @@ use crate::character::Stat;
 use crate::dice::d100;
 use crate::ipc::{Choice, Selection, TraitChoice};
 use crate::{CORE_STATS, choose, choose_vec, dice, input_trait};
-use std::cell::UnsafeCell;
+use std::rc::Rc;
 
 pub trait Event {
-    fn current_choice(&self) -> Option<Choice>;
-    fn choose(&self, choice: usize);
-    fn submit_trait(&self, choice: String);
+    fn current_choice(&self) -> Rc<Option<Choice>>;
+    fn choose(&mut self, choice: usize);
+    fn submit_trait(&mut self, choice: String);
 }
+
+// Similar to Iterator::Peekable, but with two major differences:
+// 1. it advances to the next step immediately on being constructed, so peek need not take a &mut
+// 2. it stores the current in a Rc, rather than returning a reference
+//    this allows holding the peeked item while advancing the iterator
 pub struct Event_<I>
 where
     I: Iterator<Item = Choice>,
 {
-    current_choice: UnsafeCell<Option<Choice>>,
-    iter: UnsafeCell<I>,
+    current_choice: Rc<Option<Choice>>,
+    iter: I,
 }
 
 impl<I> Event_<I>
@@ -24,49 +29,35 @@ where
 {
     fn new(mut iter: I) -> Self {
         Self {
-            current_choice: iter.next().into(),
-            iter: iter.into(),
+            current_choice: Rc::new(iter.next()),
+            iter,
         }
     }
 
-    unsafe fn advance(&self) {
-        unsafe {
-            // safety: we're single threaded, and the object is only borrowed during this function
-            *self.current_choice.get() = (*self.iter.get()).next();
-        }
+    fn advance(&mut self) {
+        self.current_choice = Rc::new(self.iter.next());
     }
 }
 
 impl<I: Iterator<Item = Choice>> Event for Event_<I> {
-    fn current_choice(&self) -> Option<Choice> {
-        unsafe {
-            // safety: we're single threaded, and the object is only borrowed during tinto_iter().into_iter().into_iter().his function
-            (*self.current_choice.get()).clone()
-        }
+    fn current_choice(&self) -> Rc<Option<Choice>> {
+        self.current_choice.clone()
     }
 
-    fn choose(&self, choice: usize) {
-        unsafe {
-            // safety: we're single threaded, and the object is only borrowed during this function
-            if let Some(Choice::Selection(s)) = &*self.current_choice.get() {
-                *s.chosen.borrow_mut() = choice;
-                self.advance();
-            } else {
-                panic!("attempted to choose when there is no choice!");
-            }
+    fn choose(&mut self, choice: usize) {
+        match &*self.current_choice {
+            Some(Choice::Selection(s)) => *s.chosen.borrow_mut() = choice,
+            _ => panic!("attempted to choose when there is no choice!"),
         }
+        self.advance();
     }
 
-    fn submit_trait(&self, choice: String) {
-        unsafe {
-            // safety: we're single threaded, and the object is only borrowed during this function
-            if let Some(Choice::String(t)) = &*self.current_choice.get() {
-                *t.chosen.borrow_mut() = choice;
-                self.advance();
-            } else {
-                panic!("attempted to choose when there is no choice!");
-            }
+    fn submit_trait(&mut self, choice: String) {
+        match &*self.current_choice {
+            Some(Choice::String(t)) => *t.chosen.borrow_mut() = choice,
+            _ => panic!("attempted to choose when there is no choice!"),
         }
+        self.advance();
     }
 }
 
@@ -87,9 +78,9 @@ where
     }
 }
 
-impl<I> From<I> for Box<dyn Event>
+impl<'a, I> From<I> for Box<dyn Event + 'a>
 where
-    I: Iterator<Item = Choice> + 'static,
+    I: Iterator<Item = Choice> + 'a,
 {
     fn from(value: I) -> Self {
         Box::new(Event_::new(value))
