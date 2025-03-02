@@ -72,8 +72,8 @@ impl SoFCharGenApp {
             for (i, option) in choice.options.iter().enumerate() {
                 let as_str = format!("{:?}", option);
                 if ui.button(&as_str).clicked() {
-                    self.choose(i);
                     self.log_choice(&as_str);
+                    self.choose(i);
                 }
             }
         });
