@@ -62,7 +62,7 @@ impl SoFCharGenApp {
     fn trait_window(&mut self, ctx: &egui::Context, t: &TraitChoice) {
         // if we're requesting a trait, put that up in front of the choice buttons
         egui::Window::new("Gain a Trait").show(ctx, |ui| {
-            ui.label(&*t.description);
+            ui.label(t.description);
             self.trait_buttons(ui);
         });
     }
