@@ -1,7 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
 mod app;
-mod util;
 mod ipc;
+mod util;
 
 pub use app::SoFCharGenApp;

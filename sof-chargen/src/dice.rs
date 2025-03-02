@@ -7,7 +7,10 @@ pub struct Roll {
 
 impl Roll {
     pub fn result(&self) -> i8 {
-        self.selected_indices.iter().map(|&i| self.all_dice[i]).sum()
+        self.selected_indices
+            .iter()
+            .map(|&i| self.all_dice[i])
+            .sum()
     }
 }
 
@@ -42,14 +45,17 @@ pub fn d100_disadvantage(dice: i8) -> Roll {
         return d100().into();
     }
     let mut all_dice: Vec<i8> = (0..dice).map(|_| (d10() - 1) * 10).collect();
-    let selected_dice = all_dice.iter().enumerate()
+    let selected_dice = all_dice
+        .iter()
+        .enumerate()
         .min_by_key(|&(_, &v)| v)
-        .map(|(index, _)| index).unwrap();
+        .map(|(index, _)| index)
+        .unwrap();
 
     all_dice.push(d10());
 
     Roll {
-        selected_indices: vec![selected_dice, all_dice.len()-1],
+        selected_indices: vec![selected_dice, all_dice.len() - 1],
         all_dice,
     }
 }

@@ -1,14 +1,14 @@
-use crate::app::AppTab;
 use crate::SoFCharGenApp;
+use crate::app::AppTab;
 use egui::{Layout, RichText, Ui};
 use sof_chargen::ipc::Selection;
 use sof_chargen::ipc::{Choice, TraitChoice};
-use sof_chargen::{event, Character, Stat, CORE_STATS};
+use sof_chargen::{CORE_STATS, Character, Stat, event};
 use std::rc::Rc;
 
 macro_rules! peek_choice {
     ($self: ident) => {
-        &* if let Some(e) = &($self).current_event {
+        &*if let Some(e) = &($self).current_event {
             e.current_choice()
         } else {
             // hoping this gets optimised out since it's immediately dereferenced above

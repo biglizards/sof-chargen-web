@@ -1,7 +1,7 @@
+use sof_chargen::dice::Roll;
+use sof_chargen::{Backend, Character, Stat};
 use std::cell::RefCell;
 use std::rc::Rc;
-use sof_chargen::{Backend, Character, Stat};
-use sof_chargen::dice::Roll;
 
 #[derive(Clone)]
 pub struct AppBackend {

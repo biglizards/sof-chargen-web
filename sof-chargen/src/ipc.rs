@@ -70,7 +70,8 @@ macro_rules! choose_vec {
             description: ($descr),
             options: as_choosable,
             chosen: chosen.clone(),
-        }.into();
+        }
+        .into();
         *options[*chosen.borrow()]
     }};
 }
@@ -82,7 +83,8 @@ macro_rules! input_trait {
         yield TraitChoice {
             description: ($description),
             chosen: chosen.clone(),
-        }.into();
+        }
+        .into();
         chosen.take()
     }};
 }

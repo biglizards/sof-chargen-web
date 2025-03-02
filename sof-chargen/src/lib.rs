@@ -4,7 +4,7 @@
 extern crate enum_map;
 
 pub use backend::Backend;
-pub use character::{Character, Stat, CORE_STATS};
+pub use character::{CORE_STATS, Character, Stat};
 
 mod backend;
 mod character;
