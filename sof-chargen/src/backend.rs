@@ -1,40 +1,32 @@
 use crate::character::{Character, Stat};
-use std::fmt;
+use crate::dice::Roll;
+use std::cell::RefCell;
 
 pub trait Backend {
-    fn choose<T: Copy + fmt::Display + Send + Sync>(
-        &self,
-        description: &str,
-        options: &Vec<T>,
-    ) -> impl std::future::Future<Output = T> + Send;
-    fn set_stat(&mut self, stat: Stat, new_val: i8);
+    fn set_stat(&self, stat: Stat, new_val: i8);
+    fn set_stat_by_roll(&self, stat: Stat, roll: &Roll) {
+        self.set_stat(stat, roll.result())
+    }
     fn get_stat(&self, stat: Stat) -> Option<i8>;
-    fn gain_trait(&mut self, description: &str) -> impl std::future::Future<Output = ()> + Send;
+    fn gain_trait(&self, description: String);
 }
+
+// the backend contract effectively requires interior mutability
+// in theory this could be an UnsafeCell since we never return references to character
 #[derive(Debug, Default)]
 pub struct BaseBackend {
-    pub character: Character,
+    pub character: RefCell<Character>,
 }
 
 impl Backend for BaseBackend {
-    async fn choose<T: Copy + fmt::Display + Send + Sync>(
-        &self,
-        _description: &str,
-        options: &Vec<T>,
-    ) -> T {
-        *options
-            .first()
-            .expect("attempted to choose from 0 options!")
-    }
-
-    fn set_stat(&mut self, stat: Stat, new_val: i8) {
-        self.character.stats[stat] = Some(new_val);
+    fn set_stat(&self, stat: Stat, new_val: i8) {
+        self.character.borrow_mut().stats[stat] = Some(new_val);
     }
     fn get_stat(&self, stat: Stat) -> Option<i8> {
-        self.character.stats[stat]
+        self.character.borrow().stats[stat]
     }
 
-    async fn gain_trait(&mut self, description: &str) {
+    fn gain_trait(&self, description: String) {
         // just don't
         // normally you'd prompt the user for input and store it somewhere
         println!("{}", description)

@@ -1,8 +1,12 @@
-use backend::AppBackend;
+// SoFCharGenApp contains:
+// - state needed to run the web/app interface
+
+use crate::app::backend::BACKEND;
+use crate::app::char_sheet::peek_choice;
 use egui::os::OperatingSystem;
-use sof_chargen::{Backend, Character, Stat};
-use std::cell::RefCell;
-use std::sync::{mpsc, Arc, RwLock};
+use sof_chargen::event::Event;
+use sof_chargen::{Backend, Stat};
+use std::rc::Rc;
 
 mod backend;
 mod char_sheet;
@@ -11,56 +15,20 @@ mod char_sheet;
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SoFCharGenApp {
-    #[serde(skip)]
-    backend: AppBackend,
-
-    character: Arc<RwLock<Character>>,
-    log: RefCell<String>,
     tab: AppTab,
 
     #[serde(skip)]
-    choice: Vec<String>,
-    #[serde(skip)]
-    choice_description: String,
-
-    #[serde(skip)]
-    choice_vec: mpsc::Receiver<(String, Vec<String>, async_channel::Sender<usize>)>,
-    #[serde(skip)]
-    choice_send: Option<async_channel::Sender<usize>>,
-
-    // it really feels like there should be a less verbose way of representing this idiom
-    #[serde(skip)]
-    trait_read: mpsc::Receiver<(String, async_channel::Sender<String>)>,
-    #[serde(skip)]
-    trait_description: String,
-    #[serde(skip)]
     trait_submission: String,
     #[serde(skip)]
-    trait_sender: Option<async_channel::Sender<String>>,
+    current_event: Option<Box<dyn Event>>,
 }
 
 impl Default for SoFCharGenApp {
     fn default() -> Self {
-        let (cv_s, cv_r) = mpsc::channel();
-        let (t_s, t_r) = mpsc::channel();
-        let character: Arc<RwLock<Character>> = Default::default();
         Self {
-            backend: AppBackend {
-                character: Arc::clone(&character),
-                choice_vec: cv_s,
-                trait_send: t_s,
-            },
-            character,
-            log: Default::default(),
+            trait_submission: String::new(),
             tab: AppTab::Sheet,
-            choice: Default::default(),
-            choice_description: Default::default(),
-            choice_vec: cv_r,
-            choice_send: Default::default(),
-            trait_read: t_r,
-            trait_description: Default::default(),
-            trait_submission: Default::default(),
-            trait_sender: Default::default(),
+            current_event: None,
         }
     }
 }
@@ -81,56 +49,53 @@ impl SoFCharGenApp {
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
-            let mut this: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-            this.backend.character = this.character.clone();
-            return this;
+            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
         Default::default()
     }
 
-    fn check_channels(&mut self) {
-        // check the buffers to see if we've been sent any interaction requests from events
-        if let Ok((desc, vec, s)) = self.choice_vec.try_recv() {
-            self.log(&desc);
-            self.choice = vec;
-            self.choice_send = Some(s);
-            self.choice_description = desc;
-        }
-        if let Ok((desc, s)) = self.trait_read.try_recv() {
-            self.log(&desc);
-            self.trait_description = desc;
-            self.trait_sender = Some(s);
-            self.trait_submission = String::new();
-        }
-    }
-
     fn get_stat_str(&self, stat: Stat) -> String {
-        if let Some(v) = self.backend.get_stat(stat) {
+        if let Some(v) = BACKEND.get_stat(stat) {
             return v.to_string();
         }
         "-".to_string()
     }
 
-    fn log(&self, str: &str) {
-        self.log.borrow_mut().push('\n');
-        self.log.borrow_mut().push_str(str);
+    fn get_current_prompt(&self) -> Option<&'static str> {
+        match peek_choice!(self) {
+            None => None,
+            Some(o) => Some(o.description()),
+        }
+    }
+
+    fn log_choice(&self, choice: &str) {
+        let mut log = BACKEND.log.borrow_mut();
+        log.push('\n');
+
+        if let Some(description) = self.get_current_prompt() {
+            log.push_str(description)
+        } else {
+            log.push_str("[TRIED TO LOG CHOICE WITH NO PENDING CHOICE]")
+        }
+        log.push_str(": ");
+        log.push_str(choice);
     }
     fn reset_log(&self) {
-        self.log.borrow_mut().clear()
+        BACKEND.log.borrow_mut().clear()
     }
 }
 
 impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        assert!(Arc::ptr_eq(&self.character, &self.backend.character));
         self.render(ctx);
     }
 
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
+        eframe::set_value(storage, backend::BACKEND_KEY, &*BACKEND);
     }
 }
 

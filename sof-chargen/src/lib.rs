@@ -1,14 +1,16 @@
+#![feature(gen_blocks)]
+
 #[macro_use]
 extern crate enum_map;
 
 pub use backend::Backend;
-pub use character::{Character, Stat, CORE_STATS};
+pub use character::{CORE_STATS, Character, Stat};
 
 mod backend;
 mod character;
-mod dice;
+pub mod dice;
 pub mod event;
-
+pub mod ipc;
 /*
  ok so rough structure of chargen
  - rolling core stats

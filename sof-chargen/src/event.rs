@@ -1,102 +1,133 @@
 use crate::backend::Backend;
-use crate::character::{Stat, CORE_STATS};
-use crate::dice;
+use crate::character::Stat;
 use crate::dice::d100;
-use crate::event::BuiltinEvent::PickStat;
-use async_trait::async_trait;
+use crate::ipc::{Choice, Selection, TraitChoice};
+use crate::{CORE_STATS, choose, choose_vec, dice, input_trait};
+use std::rc::Rc;
 
-#[async_trait]
-pub trait Event<T: Backend> {
-    async fn run(&self, backend: &mut T);
+pub trait Event {
+    fn current_choice(&self) -> Rc<Option<Choice>>;
+    fn choose(&mut self, choice: usize);
+    fn submit_trait(&mut self, choice: String);
 }
 
-#[async_trait]
-impl<T: Backend + Send + Sync, F, G> Event<T> for F
+// Similar to Iterator::Peekable, but with two major differences:
+// 1. it advances to the next step immediately on being constructed, so peek need not take a &mut
+// 2. it stores the current in a Rc, rather than returning a reference
+//    this allows holding the peeked item while advancing the iterator
+pub struct Event_<I>
 where
-    F: Fn(&mut T) -> G + Sync + Send,
-    G: std::future::Future<Output = ()> + Send + Sync,
+    I: Iterator<Item = Choice>,
 {
-    async fn run(&self, backend: &mut T) {
-        self(backend).await;
-    }
+    current_choice: Rc<Option<Choice>>,
+    iter: I,
 }
 
-#[allow(dead_code)]
-pub struct FileEvent<T> {
-    pub sub_events: Vec<Box<dyn Event<T> + Sync + Send>>,
-}
-
-#[async_trait]
-impl<T: Backend + Send + Sync> Event<T> for FileEvent<T> {
-    async fn run(&self, backend: &mut T) {
-        for event in self.sub_events.iter() {
-            event.run(backend).await
+impl<I> Event_<I>
+where
+    I: Iterator<Item = Choice>,
+{
+    fn new(mut iter: I) -> Self {
+        Self {
+            current_choice: Rc::new(iter.next()),
+            iter,
         }
     }
-}
 
-pub enum BuiltinEvent {
-    ProsperousConstellations,
-    PickStat,
-    RollMagic,
-    RollLuck,
-}
-
-#[async_trait]
-impl<T: Backend + Send + Sync> Event<T> for BuiltinEvent {
-    async fn run(&self, backend: &mut T) {
-        match self {
-            BuiltinEvent::ProsperousConstellations => prosperous_constellations(backend).await,
-            BuiltinEvent::PickStat => pick_stat(backend).await,
-            BuiltinEvent::RollMagic => roll_magic(backend).await,
-            BuiltinEvent::RollLuck => roll_luck(backend).await,
-        }
+    fn advance(&mut self) {
+        self.current_choice = Rc::new(self.iter.next());
     }
 }
 
-pub async fn prosperous_constellations<T: Backend>(backend: &mut T) {
+impl<I: Iterator<Item = Choice>> Event for Event_<I> {
+    fn current_choice(&self) -> Rc<Option<Choice>> {
+        self.current_choice.clone()
+    }
+
+    fn choose(&mut self, choice: usize) {
+        match &*self.current_choice {
+            Some(Choice::Selection(s)) => *s.chosen.borrow_mut() = choice,
+            _ => panic!("attempted to choose when there is no choice!"),
+        }
+        self.advance();
+    }
+
+    fn submit_trait(&mut self, choice: String) {
+        match &*self.current_choice {
+            Some(Choice::String(t)) => *t.chosen.borrow_mut() = choice,
+            _ => panic!("attempted to choose when there is no choice!"),
+        }
+        self.advance();
+    }
+}
+
+impl<I> From<I> for Event_<I>
+where
+    I: Iterator<Item = Choice>,
+{
+    fn from(value: I) -> Self {
+        Event_::new(value)
+    }
+}
+impl<I> From<I> for Box<Event_<I>>
+where
+    I: Iterator<Item = Choice>,
+{
+    fn from(value: I) -> Self {
+        Box::new(Event_::new(value))
+    }
+}
+
+impl<'a, I> From<I> for Box<dyn Event + 'a>
+where
+    I: Iterator<Item = Choice> + 'a,
+{
+    fn from(value: I) -> Self {
+        Box::new(Event_::new(value))
+    }
+}
+
+pub gen fn prosperous_constellations<T: Backend>(backend: &T) -> Choice {
     // reroll luck
     let new_luck = d100();
     // choice: keep either value
-    backend.set_stat(
-        Stat::Luck,
-        backend
-            .choose(
-                "Choose either luck value",
-                &vec![backend.get_stat(Stat::Luck).unwrap_or_default(), new_luck],
-            )
-            .await,
-    );
+    let choice = choose![
+        "Pick either value",
+        backend.get_stat(Stat::Luck).unwrap_or_default(),
+        new_luck
+    ];
+    backend.set_stat(Stat::Luck, choice);
 
-    backend
-        .gain_trait("gain a trait related to arrogance, vanity or overconfidence")
-        .await
+    let trt = input_trait!("gain a trait related to arrogance, vanity or overconfidence");
+    backend.gain_trait(trt);
 }
 
-pub async fn pick_stat<T: Backend>(backend: &mut T) {
-    let choice = *backend
-        .choose(
-            "Pick which stat to generate next",
-            &CORE_STATS
-                .iter()
-                .filter(|&&x| backend.get_stat(x).is_none())
-                .collect(),
-        )
-        .await;
+pub gen fn pick_stat<T: Backend>(backend: &T) -> Choice {
+    let core_stat = choose_vec!(
+        "Pick a core stat to roll next",
+        CORE_STATS
+            .into_iter()
+            .filter(|&x| backend.get_stat(x).is_none())
+    );
+
     let roll = dice::d100_disadvantage(
         (2 + CORE_STATS
-            .iter()
-            .filter(|&&x| backend.get_stat(x).is_some_and(|x| x >= 50))
+            .into_iter()
+            .filter(|&x| backend.get_stat(x).is_some_and(|x| x >= 50))
             .count()) as i8,
     );
-    backend.set_stat(choice, roll);
+    backend.set_stat_by_roll(core_stat, &roll);
 
-    let mut subskills = choice.subskills();
     for i in 0..3 {
-        let choice = backend.choose("pick a sub-skill", &subskills).await;
-        subskills.remove(subskills.iter().position(|&x| x == choice).unwrap());
+        let choice = choose_vec!(
+            "pick a sub-skill",
+            core_stat
+                .subskills()
+                .into_iter()
+                .filter(|&x| backend.get_stat(x).is_none())
+        );
         let mallus: i8 = (0..i).map(|_| dice::d10()).sum();
-        backend.set_stat(choice, (roll - mallus).max(1));
+        backend.set_stat(choice, (roll.result() - mallus).max(1));
     }
 }
 
@@ -114,7 +145,8 @@ fn roll_magic_dice() -> i8 {
         val
     }
 }
-pub async fn roll_magic<T: Backend>(backend: &mut T) {
+
+pub fn roll_magic<T: Backend>(backend: &T) {
     let roll = roll_magic_dice() + roll_magic_dice();
     if roll >= 100 {
         println!("You died during character creation!");
@@ -122,22 +154,14 @@ pub async fn roll_magic<T: Backend>(backend: &mut T) {
 
     backend.set_stat(Stat::Magic, roll);
 }
-
-pub async fn roll_luck<T: Backend>(backend: &mut T) {
+pub fn roll_luck<T: Backend>(backend: &T) {
     backend.set_stat(Stat::Luck, d100());
 }
 
-pub fn roll_core_stats<T: Backend>() -> FileEvent<T>
-where
-    BuiltinEvent: Event<T>,
-{
-    FileEvent {
-        sub_events: vec![
-            Box::from(PickStat),
-            Box::from(PickStat),
-            Box::from(PickStat),
-            Box::from(PickStat),
-            Box::from(PickStat),
-        ],
-    }
+pub fn roll_core_stats<T: Backend>(backend: &T) -> impl Iterator<Item = Choice> {
+    pick_stat(backend)
+        .chain(pick_stat(backend))
+        .chain(pick_stat(backend))
+        .chain(pick_stat(backend))
+        .chain(pick_stat(backend))
 }
