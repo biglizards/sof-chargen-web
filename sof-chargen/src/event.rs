@@ -87,7 +87,7 @@ where
     }
 }
 
-pub gen fn prosperous_constellations<T: Backend>(mut backend: T) -> Choice {
+pub gen fn prosperous_constellations<T: Backend>(backend: &T) -> Choice {
     // reroll luck
     let new_luck = d100();
     // choice: keep either value
@@ -102,7 +102,7 @@ pub gen fn prosperous_constellations<T: Backend>(mut backend: T) -> Choice {
     backend.gain_trait(trt);
 }
 
-pub gen fn pick_stat<T: Backend>(mut backend: T) -> Choice {
+pub gen fn pick_stat<T: Backend>(backend: &T) -> Choice {
     let core_stat = choose_vec!(
         "Pick a core stat to roll next",
         CORE_STATS
@@ -146,7 +146,7 @@ fn roll_magic_dice() -> i8 {
     }
 }
 
-pub fn roll_magic<T: Backend>(backend: &mut T) {
+pub fn roll_magic<T: Backend>(backend: &T) {
     let roll = roll_magic_dice() + roll_magic_dice();
     if roll >= 100 {
         println!("You died during character creation!");
@@ -154,14 +154,14 @@ pub fn roll_magic<T: Backend>(backend: &mut T) {
 
     backend.set_stat(Stat::Magic, roll);
 }
-pub fn roll_luck<T: Backend>(backend: &mut T) {
+pub fn roll_luck<T: Backend>(backend: &T) {
     backend.set_stat(Stat::Luck, d100());
 }
 
-pub fn roll_core_stats<T: Backend + Clone>(backend: T) -> impl Iterator<Item = Choice> {
-    pick_stat(backend.clone())
-        .chain(pick_stat(backend.clone()))
-        .chain(pick_stat(backend.clone()))
-        .chain(pick_stat(backend.clone()))
+pub fn roll_core_stats<T: Backend>(backend: &T) -> impl Iterator<Item = Choice> {
+    pick_stat(backend)
+        .chain(pick_stat(backend))
+        .chain(pick_stat(backend))
+        .chain(pick_stat(backend))
         .chain(pick_stat(backend))
 }
