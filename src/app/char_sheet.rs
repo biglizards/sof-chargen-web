@@ -1,5 +1,6 @@
 use crate::SoFCharGenApp;
 use crate::app::AppTab;
+use crate::app::backend::BACKEND;
 use egui::{Layout, RichText, Ui};
 use sof_chargen::ipc::Selection;
 use sof_chargen::ipc::{Choice, TraitChoice};
@@ -88,7 +89,7 @@ impl SoFCharGenApp {
     fn stats(&self, ui: &mut egui::Ui) {
         // first row: name, [blank], luck, magic
         ui.columns(4, |columns| {
-            columns[0].text_edit_singleline(&mut self.character.borrow_mut().name);
+            columns[0].text_edit_singleline(&mut BACKEND.character.borrow_mut().name);
             // luck and magic
             columns[2].label(format!("Magic: {}", self.get_stat_str(Stat::Magic)));
             columns[3].label(format!("Luck: {}", self.get_stat_str(Stat::Luck)));
@@ -106,7 +107,7 @@ impl SoFCharGenApp {
 
     fn traits(&self, ui: &mut egui::Ui) {
         // add all the traits
-        let traits = &self.backend.character.borrow().traits;
+        let traits = &BACKEND.character.borrow().traits;
         if !traits.is_empty() {
             ui.label("Traits");
         }
@@ -122,14 +123,14 @@ impl SoFCharGenApp {
 
     fn debug_buttons(&mut self, ui: &mut egui::Ui) {
         if ui.button("Generate Core Stats").clicked() {
-            self.current_event = Some(event::roll_core_stats(self.backend.clone()).into());
+            self.current_event = Some(event::roll_core_stats(&*BACKEND).into());
         }
         if ui.button("Roll Magic and Luck").clicked() {
-            event::roll_magic(&mut self.backend);
-            event::roll_luck(&mut self.backend);
+            event::roll_magic(&*BACKEND);
+            event::roll_luck(&*BACKEND);
         }
         if ui.button("Reset").clicked() {
-            *self.backend.character.borrow_mut() = Character {
+            *BACKEND.character.borrow_mut() = Character {
                 stats: Default::default(),
                 name: "Enter Name".to_string(),
                 traits: vec![],
@@ -137,8 +138,7 @@ impl SoFCharGenApp {
             self.reset_log();
         }
         if ui.button("Pick a Star").clicked() {
-            self.current_event =
-                Some(event::prosperous_constellations(self.backend.clone()).into());
+            self.current_event = Some(event::prosperous_constellations(&*BACKEND).into());
         }
         ui.separator();
     }

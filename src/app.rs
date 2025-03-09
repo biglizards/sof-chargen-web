@@ -1,8 +1,7 @@
 use crate::app::char_sheet::peek_choice;
-use backend::AppBackend;
 use egui::os::OperatingSystem;
 use sof_chargen::event::Event;
-use sof_chargen::{Backend, Character, Stat};
+use sof_chargen::{Backend, Stat};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -13,26 +12,18 @@ mod char_sheet;
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SoFCharGenApp {
-    #[serde(skip)]
-    backend: AppBackend,
-
-    character: Rc<RefCell<Character>>,
     log: RefCell<String>,
     tab: AppTab,
-    trait_submission: String,
 
+    #[serde(skip)]
+    trait_submission: String,
     #[serde(skip)]
     current_event: Option<Box<dyn Event>>,
 }
 
 impl Default for SoFCharGenApp {
     fn default() -> Self {
-        let character: Rc<RefCell<Character>> = Default::default();
         Self {
-            backend: AppBackend {
-                character: character.clone(),
-            },
-            character,
             log: Default::default(),
             trait_submission: String::new(),
             tab: AppTab::Sheet,
@@ -57,16 +48,14 @@ impl SoFCharGenApp {
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
-            let mut this: Self = eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-            this.backend.character = this.character.clone();
-            return this;
+            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
         Default::default()
     }
 
     fn get_stat_str(&self, stat: Stat) -> String {
-        if let Some(v) = self.backend.get_stat(stat) {
+        if let Some(v) = BACKEND.get_stat(stat) {
             return v.to_string();
         }
         "-".to_string()
@@ -99,13 +88,13 @@ impl SoFCharGenApp {
 impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        assert!(Rc::ptr_eq(&self.character, &self.backend.character));
         self.render(ctx);
     }
 
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
+        eframe::set_value(storage, backend::BACKEND_KEY, &*BACKEND);
     }
 }
 
