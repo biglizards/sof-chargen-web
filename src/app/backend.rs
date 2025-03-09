@@ -1,8 +1,10 @@
-use epi::Storage;
 use sof_chargen::dice::Roll;
 use sof_chargen::{Backend, Character, Stat};
 use std::cell::RefCell;
 use std::sync::LazyLock;
+
+#[cfg(not(target_arch = "wasm32"))]
+use epi::Storage;
 
 pub static BACKEND_KEY: &str = "backend";
 
