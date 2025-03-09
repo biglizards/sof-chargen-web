@@ -168,7 +168,7 @@ impl SoFCharGenApp {
                 .stick_to_bottom(true)
                 .show(ui, |ui| {
                     ui.with_layout(Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                        ui.label(&*self.log.borrow());
+                        ui.label(&*BACKEND.log.borrow());
                     });
                     match peek_choice!(self) {
                         Some(Choice::String(t)) => {

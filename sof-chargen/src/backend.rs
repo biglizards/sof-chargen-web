@@ -1,6 +1,6 @@
-use std::cell::RefCell;
 use crate::character::{Character, Stat};
 use crate::dice::Roll;
+use std::cell::RefCell;
 
 pub trait Backend {
     fn set_stat(&self, stat: Stat, new_val: i8);

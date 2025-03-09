@@ -9,6 +9,7 @@ pub static BACKEND_KEY: &str = "backend";
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 pub struct AppBackend {
     pub character: RefCell<Character>,
+    pub log: RefCell<String>,
 }
 
 // we don't use threads, so all types are vacuously Sync

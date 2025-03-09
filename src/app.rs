@@ -1,8 +1,11 @@
+// SoFCharGenApp contains:
+// - state needed to run the web/app interface
+
+use crate::app::backend::BACKEND;
 use crate::app::char_sheet::peek_choice;
 use egui::os::OperatingSystem;
 use sof_chargen::event::Event;
 use sof_chargen::{Backend, Stat};
-use std::cell::RefCell;
 use std::rc::Rc;
 
 mod backend;
@@ -12,7 +15,6 @@ mod char_sheet;
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct SoFCharGenApp {
-    log: RefCell<String>,
     tab: AppTab,
 
     #[serde(skip)]
@@ -24,7 +26,6 @@ pub struct SoFCharGenApp {
 impl Default for SoFCharGenApp {
     fn default() -> Self {
         Self {
-            log: Default::default(),
             trait_submission: String::new(),
             tab: AppTab::Sheet,
             current_event: None,
@@ -69,7 +70,7 @@ impl SoFCharGenApp {
     }
 
     fn log_choice(&self, choice: &str) {
-        let mut log = self.log.borrow_mut();
+        let mut log = BACKEND.log.borrow_mut();
         log.push('\n');
 
         if let Some(description) = self.get_current_prompt() {
@@ -81,7 +82,7 @@ impl SoFCharGenApp {
         log.push_str(choice);
     }
     fn reset_log(&self) {
-        self.log.borrow_mut().clear()
+        BACKEND.log.borrow_mut().clear()
     }
 }
 
