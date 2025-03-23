@@ -1,4 +1,4 @@
-use sof_chargen::dice::Roll;
+use sof_chargen::dice::DiceRoll;
 use sof_chargen::{Backend, Character, Stat};
 use std::cell::RefCell;
 use std::sync::LazyLock;
@@ -46,12 +46,9 @@ pub static BACKEND: LazyLock<AppBackend> = LazyLock::new(|| {
 });
 
 impl Backend for AppBackend {
-    fn set_stat(&self, stat: Stat, new_val: i8) {
-        self.character.borrow_mut().stats[stat] = Some(new_val);
-    }
-
-    fn set_stat_by_roll(&self, stat: Stat, roll: &Roll) {
-        self.set_stat(stat, roll.result());
+    fn set_stat<T: DiceRoll>(&self, stat: Stat, roll: &T) {
+        self.character.borrow_mut().stats[stat] = Some(roll.result().max(1));
+        println!("{}", roll.render());
     }
     fn get_stat(&self, stat: Stat) -> Option<i8> {
         self.character.borrow().stats[stat]
