@@ -1,11 +1,11 @@
 // SoFCharGenApp contains:
 // - state needed to run the web/app interface
 
-use std::cell::Cell;
 use crate::app::backend::BACKEND;
 use egui::os::OperatingSystem;
-use sof_chargen::{Backend, Stat};
 use sof_chargen::ipc::Choice;
+use sof_chargen::{Backend, Stat};
+use std::cell::Cell;
 
 mod backend;
 mod char_sheet;
@@ -95,7 +95,8 @@ impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.render(ctx);
-        if self.made_choice.take() || self.current_event.is_some() && self.current_choice.is_none() {
+        if self.made_choice.take() || self.current_event.is_some() && self.current_choice.is_none()
+        {
             self.current_choice = None;
             self.current_choice = self.current_event.as_mut().unwrap().next();
             if self.current_choice.is_none() {

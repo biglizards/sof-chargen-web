@@ -11,7 +11,7 @@ use std::rc::Rc;
 // like reminder text or a help window that explains what the option is in more detail
 // these would probably all be strings
 pub struct Choosable {
-    pub description: String
+    pub description: String,
 }
 
 impl Choosable {
@@ -19,7 +19,7 @@ impl Choosable {
     // is going to have to render it to a string at some point
     pub fn from<T: Debug>(t: &T) -> Self {
         Self {
-            description: format!("{:?}", t)
+            description: format!("{:?}", t),
         }
     }
 }
@@ -85,7 +85,8 @@ macro_rules! choose_vec {
             description: ($descr),
             options: options,
             chosen: chosen.clone(),
-        }.into();
+        }
+        .into();
         $x.remove(chosen.get())
     }};
     ($descr: literal, $x: expr) => {{
@@ -124,7 +125,7 @@ mod tests {
             match iter.next() {
                 None => break,
                 Some(Choice::String(t)) => t.chosen.set(String::from("example")),
-                Some(Choice::Selection(s)) => s.chosen.set(0)
+                Some(Choice::Selection(s)) => s.chosen.set(0),
             }
         }
     }

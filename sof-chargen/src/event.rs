@@ -2,7 +2,7 @@ use crate::backend::Backend;
 use crate::character::Stat;
 use crate::dice::{DiceRoll, MagicDice, d100};
 use crate::ipc::Choice;
-use crate::{CORE_STATS, choose, choose_vec, roll, input_trait};
+use crate::{CORE_STATS, choose, choose_vec, input_trait, roll};
 
 pub gen fn prosperous_constellations<T: Backend>(backend: &T) -> Choice {
     // reroll luck

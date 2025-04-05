@@ -1,16 +1,16 @@
-use crate::app::backend::BACKEND;
-use crate::app::AppTab;
 use crate::SoFCharGenApp;
+use crate::app::AppTab;
+use crate::app::backend::BACKEND;
 use egui::{Layout, RichText, Ui};
 use sof_chargen::ipc::Choice;
 use sof_chargen::ipc::Selection;
-use sof_chargen::{event, Character, Stat, CORE_STATS};
+use sof_chargen::{CORE_STATS, Character, Stat, event};
 
 impl SoFCharGenApp {
     fn choose(&self, i: usize) {
         match &self.current_choice {
             Some(Choice::Selection(s)) => s.chosen.set(i),
-            _ => panic!("attempted to choose when there is no choice!")
+            _ => panic!("attempted to choose when there is no choice!"),
         }
         self.made_choice.set(true);
     }
@@ -23,7 +23,7 @@ impl SoFCharGenApp {
             Some(Choice::String(t)) => {
                 t.chosen.set(std::mem::take(&mut self.trait_submission));
             }
-            _ => panic!("attempted to choose when there is no choice!")
+            _ => panic!("attempted to choose when there is no choice!"),
         }
         self.made_choice.set(true);
     }
@@ -114,9 +114,7 @@ impl SoFCharGenApp {
 
     fn debug_buttons(&mut self, ui: &mut egui::Ui) {
         if ui.button("Generate Core Stats").clicked() {
-            self.current_event = Some(
-                Box::new(event::roll_core_stats(&*BACKEND))
-            );
+            self.current_event = Some(Box::new(event::roll_core_stats(&*BACKEND)));
         }
         if ui.button("Roll Magic and Luck").clicked() {
             event::roll_magic(&*BACKEND);
@@ -131,9 +129,7 @@ impl SoFCharGenApp {
             self.reset_log();
         }
         if ui.button("Pick a Star").clicked() {
-            self.current_event = Some(
-                Box::new(event::prosperous_constellations(&*BACKEND))
-            );
+            self.current_event = Some(Box::new(event::prosperous_constellations(&*BACKEND)));
         }
         ui.separator();
     }
