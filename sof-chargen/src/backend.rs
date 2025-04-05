@@ -1,12 +1,9 @@
 use crate::character::{Character, Stat};
-use crate::dice::Roll;
+use crate::dice::DiceRoll;
 use std::cell::RefCell;
 
 pub trait Backend {
-    fn set_stat(&self, stat: Stat, new_val: i8);
-    fn set_stat_by_roll(&self, stat: Stat, roll: &Roll) {
-        self.set_stat(stat, roll.result())
-    }
+    fn set_stat<T: DiceRoll>(&self, stat: Stat, roll: &T);
     fn get_stat(&self, stat: Stat) -> Option<i8>;
     fn gain_trait(&self, description: String);
 }
@@ -19,8 +16,9 @@ pub struct BaseBackend {
 }
 
 impl Backend for BaseBackend {
-    fn set_stat(&self, stat: Stat, new_val: i8) {
-        self.character.borrow_mut().stats[stat] = Some(new_val);
+    fn set_stat<T: DiceRoll>(&self, stat: Stat, new_val: &T) {
+        // during character generation, stats may not go below 1
+        self.character.borrow_mut().stats[stat] = Some(new_val.result().max(1));
     }
     fn get_stat(&self, stat: Stat) -> Option<i8> {
         self.character.borrow().stats[stat]

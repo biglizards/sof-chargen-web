@@ -1,25 +1,44 @@
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-pub trait Choosable: Debug {}
+// An API for implementing the axiom of choice by presenting a vector of options to a user
+// - can select a thing from a vector of things
+// - those things need not be copy/clone
+// - it need not take ownership of the vector (but optionally can)
 
-impl<T> Choosable for T where T: Debug {}
+// I had initially intended for the type to also contain other functions,
+// like reminder text or a help window that explains what the option is in more detail
+// these would probably all be strings
+pub struct Choosable {
+    pub description: String,
+}
 
-#[derive(Clone)]
+impl Choosable {
+    // there isn't really a downside to doing this early, since any user-facing interface
+    // is going to have to render it to a string at some point
+    pub fn from<T: Debug>(t: &T) -> Self {
+        Self {
+            description: format!("{:?}", t),
+        }
+    }
+}
+
 pub struct Selection {
     pub description: &'static str,
-    pub options: Vec<Rc<dyn Choosable>>,
-    pub(crate) chosen: Rc<RefCell<usize>>,
+    // the main downside of the trait is that all the things are moved into an rc
+    // it may be possible to get around this by making choosable a struct
+    pub options: Vec<Choosable>,
+    // this RC is how we signal home
+    // Rust doesn't support passing additional arguments into generator expressions like Python
+    pub chosen: Rc<Cell<usize>>,
 }
 
-#[derive(Clone)]
 pub struct TraitChoice {
     pub description: &'static str,
-    pub(crate) chosen: Rc<RefCell<String>>,
+    pub chosen: Rc<Cell<String>>,
 }
 
-#[derive(Clone)]
 pub enum Choice {
     Selection(Selection),
     String(TraitChoice),
@@ -49,42 +68,93 @@ impl Choice {
 macro_rules! choose {
     ($descr: literal, $($x: expr),*) => {
         {
-            let options = vec![$(std::rc::Rc::new($x)),*];
-            let as_choosable = options.iter().map(|t| t.clone() as std::rc::Rc<dyn crate::ipc::Choosable>).collect();
-            let chosen = std::rc::Rc::from(std::cell::RefCell::new(0));
-            yield Selection {description: ($descr), options: as_choosable, chosen: chosen.clone()}.into();
-            *options[*chosen.borrow()]
+            let mut orig = vec![$($x),*];
+            let options = orig.iter().map(|x| crate::ipc::Choosable::from(x)).collect();
+            let chosen = std::rc::Rc::from(std::cell::Cell::new(0));
+            yield crate::ipc::Selection {description: ($descr), options: options, chosen: chosen.clone()}.into();
+            orig.remove(chosen.get())
         }
     };
 }
 #[macro_export]
 macro_rules! choose_vec {
-    ($descr: literal, $x: expr) => {{
-        let options: Vec<_> = ($x).into_iter().map(|x| std::rc::Rc::from(x)).collect();
-        let as_choosable = options
-            .iter()
-            .map(|t| t.clone() as std::rc::Rc<dyn crate::ipc::Choosable>)
-            .collect();
-        let chosen = std::rc::Rc::from(std::cell::RefCell::new(0));
-        yield Selection {
+    ($descr: literal, $x: ident) => {{
+        let options = $x.iter().map(|x| crate::ipc::Choosable::from(x)).collect();
+        let chosen = std::rc::Rc::from(std::cell::Cell::new(0));
+        yield crate::ipc::Selection {
             description: ($descr),
-            options: as_choosable,
+            options: options,
             chosen: chosen.clone(),
         }
         .into();
-        *options[*chosen.borrow()]
+        $x.remove(chosen.get())
+    }};
+    ($descr: literal, $x: expr) => {{
+        // maybe we got passed an iter - if so, consume it into a vector
+        let mut orig: Vec<_> = ($x).into_iter().collect();
+        choose_vec!($descr, orig)
+    }};
+    // consume causes the macro to take ownership of the vector
+    // this allows it to be rebound as mutable even if it was originally immutable
+    // see tests::test_ints for an example of where this is needed
+    (consume $descr: literal, $x: expr) => {{
+        // put it in parentheses to ensure that it's always an expression and not an ident
+        choose_vec!($descr, ($x))
     }};
 }
 
 #[macro_export]
 macro_rules! input_trait {
     ($description: literal) => {{
-        let chosen = std::rc::Rc::from(std::cell::RefCell::new(String::new()));
-        yield TraitChoice {
+        let chosen = std::rc::Rc::from(std::cell::Cell::new(String::new()));
+        yield crate::ipc::TraitChoice {
             description: ($description),
             chosen: chosen.clone(),
         }
         .into();
         chosen.take()
     }};
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run_test(mut iter: impl Iterator<Item = Choice>) {
+        loop {
+            match iter.next() {
+                None => break,
+                Some(Choice::String(t)) => t.chosen.set(String::from("example")),
+                Some(Choice::Selection(s)) => s.chosen.set(0),
+            }
+        }
+    }
+
+    gen fn test_ints() -> Choice {
+        let vec = vec![1, 2, 3];
+        let choice = choose_vec!(consume "something", vec);
+        assert_eq!(choice, 1);
+
+        let choice = choose!("something", 1, 2, 3);
+        assert_eq!(choice, 1);
+    }
+
+    gen fn test_no_copy() -> Choice {
+        #[derive(Debug, Eq, PartialEq)]
+        struct Foo(i32);
+
+        let mut vec = vec![Foo(1), Foo(2), Foo(3)];
+        let choice: Foo = choose_vec!("something", vec);
+        assert_eq!(choice, Foo(1));
+        assert_eq!(vec, [Foo(2), Foo(3)]);
+
+        let choice: Foo = choose!("something", Foo(1), Foo(2), Foo(3));
+        assert_eq!(choice, Foo(1));
+    }
+
+    #[test]
+    fn test_simple_choices() {
+        run_test(test_ints());
+        run_test(test_no_copy());
+    }
 }

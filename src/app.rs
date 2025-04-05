@@ -2,11 +2,10 @@
 // - state needed to run the web/app interface
 
 use crate::app::backend::BACKEND;
-use crate::app::char_sheet::peek_choice;
 use egui::os::OperatingSystem;
-use sof_chargen::event::Event;
+use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Stat};
-use std::rc::Rc;
+use std::cell::Cell;
 
 mod backend;
 mod char_sheet;
@@ -20,7 +19,11 @@ pub struct SoFCharGenApp {
     #[serde(skip)]
     trait_submission: String,
     #[serde(skip)]
-    current_event: Option<Box<dyn Event>>,
+    current_event: Option<Box<dyn Iterator<Item = Choice>>>,
+    #[serde(skip)]
+    current_choice: Option<Choice>,
+    #[serde(skip)]
+    made_choice: Cell<bool>,
 }
 
 impl Default for SoFCharGenApp {
@@ -29,6 +32,8 @@ impl Default for SoFCharGenApp {
             trait_submission: String::new(),
             tab: AppTab::Sheet,
             current_event: None,
+            current_choice: None,
+            made_choice: Default::default(),
         }
     }
 }
@@ -63,7 +68,7 @@ impl SoFCharGenApp {
     }
 
     fn get_current_prompt(&self) -> Option<&'static str> {
-        match peek_choice!(self) {
+        match &self.current_choice {
             None => None,
             Some(o) => Some(o.description()),
         }
@@ -90,6 +95,14 @@ impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.render(ctx);
+        if self.made_choice.take() || self.current_event.is_some() && self.current_choice.is_none()
+        {
+            self.current_choice = None;
+            self.current_choice = self.current_event.as_mut().unwrap().next();
+            if self.current_choice.is_none() {
+                self.current_event = None;
+            }
+        }
     }
 
     /// Called by the framework to save state before shutdown.

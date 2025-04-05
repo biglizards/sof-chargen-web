@@ -2,38 +2,30 @@ use crate::SoFCharGenApp;
 use crate::app::AppTab;
 use crate::app::backend::BACKEND;
 use egui::{Layout, RichText, Ui};
+use sof_chargen::ipc::Choice;
 use sof_chargen::ipc::Selection;
-use sof_chargen::ipc::{Choice, TraitChoice};
 use sof_chargen::{CORE_STATS, Character, Stat, event};
-use std::rc::Rc;
-
-macro_rules! peek_choice {
-    ($self: ident) => {
-        &*if let Some(e) = &($self).current_event {
-            e.current_choice()
-        } else {
-            // hoping this gets optimised out since it's immediately dereferenced above
-            Rc::new(None)
-        }
-    };
-}
-pub(crate) use peek_choice;
 
 impl SoFCharGenApp {
-    fn choose(&mut self, i: usize) {
-        match &mut self.current_event {
-            None => {}
-            Some(t) => t.choose(i),
+    fn choose(&self, i: usize) {
+        match &self.current_choice {
+            Some(Choice::Selection(s)) => s.chosen.set(i),
+            _ => panic!("attempted to choose when there is no choice!"),
         }
+        self.made_choice.set(true);
     }
 
     fn submit_trait(&mut self) {
         if self.current_event.is_some() {
             self.log_choice(&self.trait_submission);
         }
-        if let Some(t) = &mut self.current_event {
-            t.submit_trait(std::mem::take(&mut self.trait_submission));
+        match &self.current_choice {
+            Some(Choice::String(t)) => {
+                t.chosen.set(std::mem::take(&mut self.trait_submission));
+            }
+            _ => panic!("attempted to choose when there is no choice!"),
         }
+        self.made_choice.set(true);
     }
 
     fn stat_box(&self, ui: &mut Ui, stat: Stat) {
@@ -60,26 +52,25 @@ impl SoFCharGenApp {
         }
     }
 
-    fn trait_window(&mut self, ctx: &egui::Context, t: &TraitChoice) {
+    fn trait_window(&mut self, ctx: &egui::Context, description: &'static str) {
         // if we're requesting a trait, put that up in front of the choice buttons
         egui::Window::new("Gain a Trait").show(ctx, |ui| {
-            ui.label(t.description);
+            ui.label(description);
             self.trait_buttons(ui);
         });
     }
 
-    fn choice_buttons(&mut self, ui: &mut Ui, choice: &Selection) {
+    fn choice_buttons(&self, ui: &mut Ui, choice: &Selection) {
         ui.horizontal(|ui| {
             for (i, option) in choice.options.iter().enumerate() {
-                let as_str = format!("{:?}", option);
-                if ui.button(&as_str).clicked() {
-                    self.log_choice(&as_str);
+                if ui.button(&option.description).clicked() {
+                    self.log_choice(&option.description);
                     self.choose(i);
                 }
             }
         });
     }
-    fn choice_window(&mut self, ctx: &egui::Context, s: &Selection) {
+    fn choice_window(&self, ctx: &egui::Context, s: &Selection) {
         egui::Window::new("Choice").show(ctx, |ui| {
             ui.label(s.description);
             self.choice_buttons(ui, s);
@@ -123,7 +114,7 @@ impl SoFCharGenApp {
 
     fn debug_buttons(&mut self, ui: &mut egui::Ui) {
         if ui.button("Generate Core Stats").clicked() {
-            self.current_event = Some(event::roll_core_stats(&*BACKEND).into());
+            self.current_event = Some(Box::new(event::roll_core_stats(&*BACKEND)));
         }
         if ui.button("Roll Magic and Luck").clicked() {
             event::roll_magic(&*BACKEND);
@@ -138,7 +129,7 @@ impl SoFCharGenApp {
             self.reset_log();
         }
         if ui.button("Pick a Star").clicked() {
-            self.current_event = Some(event::prosperous_constellations(&*BACKEND).into());
+            self.current_event = Some(Box::new(event::prosperous_constellations(&*BACKEND)));
         }
         ui.separator();
     }
@@ -170,7 +161,7 @@ impl SoFCharGenApp {
                     ui.with_layout(Layout::top_down_justified(egui::Align::LEFT), |ui| {
                         ui.label(&*BACKEND.log.borrow());
                     });
-                    match peek_choice!(self) {
+                    match &self.current_choice {
                         Some(Choice::String(t)) => {
                             ui.label(t.description);
                             self.trait_buttons(ui);
@@ -191,9 +182,9 @@ impl SoFCharGenApp {
         match self.tab {
             AppTab::Sheet => {
                 // if there's a choice going, render it
-                match peek_choice!(self) {
+                match &self.current_choice {
                     Some(Choice::Selection(s)) => self.choice_window(ctx, s),
-                    Some(Choice::String(t)) => self.trait_window(ctx, t),
+                    Some(Choice::String(t)) => self.trait_window(ctx, t.description),
                     _ => {}
                 }
 
