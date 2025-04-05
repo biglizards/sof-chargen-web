@@ -63,9 +63,8 @@ impl SoFCharGenApp {
     fn choice_buttons(&self, ui: &mut Ui, choice: &Selection) {
         ui.horizontal(|ui| {
             for (i, option) in choice.options.iter().enumerate() {
-                let as_str = format!("{:?}", option);
-                if ui.button(&as_str).clicked() {
-                    self.log_choice(&as_str);
+                if ui.button(&option.description).clicked() {
+                    self.log_choice(&option.description);
                     self.choose(i);
                 }
             }

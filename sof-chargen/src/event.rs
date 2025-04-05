@@ -37,14 +37,14 @@ pub gen fn pick_stat<T: Backend>(backend: &T) -> Choice {
     backend.set_stat(core_stat, &roll);
     let stat = roll.result();
 
+    let mut remaining_stats: Vec<Stat> = core_stat
+        .subskills()
+        .into_iter()
+        .filter(|&x| backend.get_stat(x).is_none())
+        .collect();
+
     for i in 0..3 {
-        let choice = choose_vec!(
-            "pick a sub-skill",
-            core_stat
-                .subskills()
-                .into_iter()
-                .filter(|&x| backend.get_stat(x).is_none())
-        );
+        let choice = choose_vec!("pick a sub-skill", remaining_stats);
         let mallus_roll = roll!(stat - i d 10);
         backend.set_stat(choice, &mallus_roll);
     }
