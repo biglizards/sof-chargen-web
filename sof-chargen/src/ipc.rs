@@ -39,9 +39,19 @@ pub struct TraitChoice {
     pub chosen: Rc<Cell<String>>,
 }
 
+// prophetic stars lets you pick a roll two times - this represents that choice
+// this is either a pure dice roll, or on a table (ie multiple numbers may have the same outcome)
+// for table rolls, we can probably just use selection above with a "pick randomly" option added
+pub struct PickRoll {
+    pub description: &'static str,
+    pub roll: Box<dyn DiceRoll>,
+    pub chosen: Rc<Cell<i8>>,
+}
+
 pub enum Choice {
     Selection(Selection),
     String(TraitChoice),
+    PickRoll(PickRoll),
 }
 
 impl From<Selection> for Choice {
@@ -54,12 +64,18 @@ impl From<TraitChoice> for Choice {
         Choice::String(value)
     }
 }
+impl From<PickRoll> for Choice {
+    fn from(value: PickRoll) -> Self {
+        Choice::PickRoll(value)
+    }
+}
 
 impl Choice {
     pub fn description(&self) -> &'static str {
         match &self {
             Choice::Selection(s) => s.description,
             Choice::String(t) => t.description,
+            Choice::PickRoll(p) => p.description,
         }
     }
 }
@@ -116,6 +132,35 @@ macro_rules! input_trait {
     }};
 }
 
+#[macro_export]
+macro_rules! pick_roll {
+    ($description: literal, $roll: expr) => {{
+        let roll = $roll;
+        let chosen = std::rc::Rc::from(std::cell::Cell::new(0));
+        yield crate::ipc::PickRoll {
+            description: $description,
+            roll: Box::new(roll.clone()),
+            chosen: chosen.clone(),
+        }
+        .into();
+        crate::dice::PickedRoll(roll, chosen.take())
+    }};
+}
+
+// not really sure which section this macro goes in, since it does both dice rolling and rpc
+// sorry i cant really separate these concerns
+#[macro_export]
+macro_rules! maybe_roll {
+    ($description: literal, $backend: ident, $($tail:tt)*) => {{
+        let roll = roll!($($tail)*);
+        if matches!($backend.get_omen(), Some(BirthOmen::PropheticSigns)) {
+            pick_roll!($description, roll)
+        } else {
+            crate::dice::PickedRoll(roll, roll.result())
+        }
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -126,6 +171,7 @@ mod tests {
                 None => break,
                 Some(Choice::String(t)) => t.chosen.set(String::from("example")),
                 Some(Choice::Selection(s)) => s.chosen.set(0),
+                Some(Choice::PickRoll(p)) => p.chosen.set(*p.roll.range().end()),
             }
         }
     }

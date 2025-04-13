@@ -1,9 +1,9 @@
 use crate::SoFCharGenApp;
 use crate::app::AppTab;
 use crate::app::backend::BACKEND;
-use egui::{Layout, RichText, Ui};
-use sof_chargen::ipc::Choice;
+use egui::{Layout, RichText, Slider, Ui};
 use sof_chargen::ipc::Selection;
+use sof_chargen::ipc::{Choice, PickRoll};
 use sof_chargen::{CORE_STATS, Character, Stat, event};
 
 impl SoFCharGenApp {
@@ -24,6 +24,16 @@ impl SoFCharGenApp {
                 t.chosen.set(std::mem::take(&mut self.trait_submission));
             }
             _ => panic!("attempted to choose when there is no choice!"),
+        }
+        self.made_choice.set(true);
+    }
+
+    fn pick_roll(&self, choice: i8) {
+        match &self.current_choice {
+            Some(Choice::PickRoll(p)) => {
+                p.chosen.set(choice);
+            }
+            _ => panic!("attempted to pick roll when there is no choice!")
         }
         self.made_choice.set(true);
     }
@@ -51,7 +61,6 @@ impl SoFCharGenApp {
             self.submit_trait();
         }
     }
-
     fn trait_window(&mut self, ctx: &egui::Context, description: &'static str) {
         // if we're requesting a trait, put that up in front of the choice buttons
         egui::Window::new("Gain a Trait").show(ctx, |ui| {
@@ -61,7 +70,7 @@ impl SoFCharGenApp {
     }
 
     fn choice_buttons(&self, ui: &mut Ui, choice: &Selection) {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for (i, option) in choice.options.iter().enumerate() {
                 if ui.button(&option.description).clicked() {
                     self.log_choice(&option.description);
@@ -74,6 +83,24 @@ impl SoFCharGenApp {
         egui::Window::new("Choice").show(ctx, |ui| {
             ui.label(s.description);
             self.choice_buttons(ui, s);
+        });
+    }
+
+    fn pick_roll_slider(&self, ui: &mut Ui, p: &PickRoll) {
+        let mut value = self.picking_roll.get();
+        ui.add(Slider::new(&mut value, p.roll.range()).text(p.description));
+        self.picking_roll.set(value);
+        ui.horizontal(|ui| {
+            if ui.button("Submit").clicked() {
+                self.pick_roll(value);
+            } else if ui.button("Roll").clicked() {
+                self.pick_roll(p.roll.result());
+            }
+        });
+    }
+    fn pick_roll_window(&self, ctx: &egui::Context, p: &PickRoll) {
+        egui::Window::new("Pick Roll").show(ctx, |ui| {
+            self.pick_roll_slider(ui, p);
         });
     }
 
@@ -170,7 +197,10 @@ impl SoFCharGenApp {
                             ui.label(s.description);
                             self.choice_buttons(ui, s);
                         }
-                        _ => {}
+                        Some(Choice::PickRoll(p)) => {
+                            ui.label(p.description);
+                        }
+                        None => {}
                     }
                 });
         });
@@ -185,7 +215,8 @@ impl SoFCharGenApp {
                 match &self.current_choice {
                     Some(Choice::Selection(s)) => self.choice_window(ctx, s),
                     Some(Choice::String(t)) => self.trait_window(ctx, t.description),
-                    _ => {}
+                    Some(Choice::PickRoll(p)) => self.pick_roll_window(ctx, p),
+                    None => {}
                 }
 
                 self.render_sheet(ctx);

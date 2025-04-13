@@ -1,23 +1,20 @@
 use rand::Rng;
+use std::ops::RangeInclusive;
 
 pub trait AsPool {
     // the dice pool may be computed dynamically, so it needs to be allocated dynamically too
     // this causes un-needed copies sometimes. TODO is there a way to only copy when needed?
     fn as_pool(&self) -> Vec<i8>;
-}
 
-impl<T> AsPool for T
-where
-    Vec<i8>: for<'a> From<&'a T>,
-{
-    fn as_pool(&self) -> Vec<i8> {
-        self.into()
-    }
+    // assuming that a pool always has dice of the same kind, return a representative dice
+    fn underlying(&self) -> impl DiceRoll;
 }
 
 pub trait DiceRoll {
     fn result(&self) -> i8;
     fn render(&self) -> String;
+    // assuming that a dice always returns a consecutive range of numbers, what is that range?
+    fn range(&self) -> RangeInclusive<i8>;
 
     fn render_nested(&self) -> String {
         format!("({})", self.render())
@@ -35,8 +32,21 @@ impl DiceRoll for i8 {
     fn render(&self) -> String {
         self.to_string()
     }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        *self..=*self
+    }
+
     fn render_nested(&self) -> String {
         self.to_string()
+    }
+}
+
+impl<T: DiceRoll, const N: i8> std::ops::Add<T> for D<N> {
+    type Output = Add<D<N>, T>;
+
+    fn add(self, rhs: T) -> Self::Output {
+        Add(self, rhs)
     }
 }
 
@@ -50,6 +60,12 @@ impl<T1: DiceRoll, T2: DiceRoll> DiceRoll for Add<T1, T2> {
     fn render(&self) -> String {
         format!("{} + {}", self.0.render_nested(), self.1.render_nested())
     }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        let r1 = self.0.range();
+        let r2 = self.1.range();
+        (r1.start() + r2.start())..=(r1.end() + r2.end())
+    }
 }
 
 pub struct Subtract<T1: DiceRoll, T2: DiceRoll>(pub T1, pub T2);
@@ -61,6 +77,12 @@ impl<T1: DiceRoll, T2: DiceRoll> DiceRoll for Subtract<T1, T2> {
 
     fn render(&self) -> String {
         format!("{} - {}", self.0.render_nested(), self.1.render_nested())
+    }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        let r1 = self.0.range();
+        let r2 = self.1.range();
+        (r1.start() - r2.end())..=(r1.end() - r2.start())
     }
 }
 
@@ -100,6 +122,10 @@ impl AsPool for D100Pool {
             })
             .collect()
     }
+
+    fn underlying(&self) -> impl DiceRoll {
+        D::<100>(0)
+    }
 }
 
 /// An N-sided die ranging from 1-N inclusive
@@ -119,6 +145,10 @@ impl<const N: i8> DiceRoll for D<N> {
 
     fn render(&self) -> String {
         self.0.render()
+    }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        1..=N
     }
 }
 
@@ -153,6 +183,13 @@ impl<const N: i8> DiceRoll for Many<N> {
                 .join("+"),
         }
     }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        let min = self.0.iter().map(|x| *x.range().start()).sum();
+        let max = self.0.iter().map(|x| *x.range().end()).sum();
+        min..=max
+    }
+
     fn render_nested(&self) -> String {
         match self.0.len() {
             0 => "0".to_string(),
@@ -172,6 +209,10 @@ impl<const N: i8> DiceRoll for Many<N> {
 impl<const N: i8> AsPool for Many<N> {
     fn as_pool(&self) -> Vec<i8> {
         self.0.iter().map(|&x| x.into()).collect()
+    }
+
+    fn underlying(&self) -> impl DiceRoll {
+        self.0[0]
     }
 }
 
@@ -206,6 +247,26 @@ impl DiceRoll for MagicDice {
             .map(D::render)
             .collect::<Vec<String>>()
             .join("+")
+    }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        1..=100
+    }
+}
+
+pub struct PickedRoll<T: DiceRoll>(pub T, pub i8);
+
+impl<T: DiceRoll> DiceRoll for PickedRoll<T> {
+    fn result(&self) -> i8 {
+        self.1
+    }
+
+    fn render(&self) -> String {
+        self.0.render()
+    }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        self.0.range()
     }
 }
 
@@ -243,6 +304,10 @@ impl<T: AsPool> DiceRoll for PickHighest<T> {
         let pool = self.0.as_pool();
         render_vantage!("max", max_by_key, pool)
     }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        self.0.underlying().range()
+    }
 }
 pub struct PickLowest<T: AsPool>(pub T);
 impl<T: AsPool> DiceRoll for PickLowest<T> {
@@ -253,6 +318,10 @@ impl<T: AsPool> DiceRoll for PickLowest<T> {
     fn render(&self) -> String {
         let pool = self.0.as_pool();
         render_vantage!("min", min_by_key, pool)
+    }
+
+    fn range(&self) -> RangeInclusive<i8> {
+        self.0.underlying().range()
     }
 }
 
@@ -342,6 +411,50 @@ mod test {
             PickHighest(throw).render_result(),
             "max(*100*, 10, 90) = 100"
         );
+    }
+
+    #[test]
+    fn test_range() {
+        assert_eq!(5i8.range().end(), &5);
+        assert_eq!(5i8.range().start(), &5);
+        assert!(5i8.range().contains(&5));
+        assert!(!5i8.range().contains(&6));
+        assert!(!5i8.range().contains(&4));
+
+        // D
+        let d10 = D::<10>::roll();
+        assert_eq!(d10.range(), 1..=10);
+        assert_eq!(d10.range().start(), &1);
+        assert_eq!(d10.range().end(), &10);
+        assert!(d10.range().contains(&10));
+        assert!(!d10.range().contains(&11));
+        assert!(d10.range().contains(&1));
+        assert!(!d10.range().contains(&0));
+
+        let add = Add(d10, d10);
+        assert_eq!(add.range(), 2..=20);
+
+        let subtract = Subtract(d10, d10);
+        assert_eq!(subtract.range(), -9..=9);
+
+        let d100pool = D100Pool {
+            d100s: vec![5, 99],
+            d10: 4,
+        };
+        assert_eq!(d100pool.underlying().range(), 1..=100);
+
+        let many = Many(vec![d10, d10]);
+        assert_eq!(many.range(), 2..=20);
+        assert_eq!(many.underlying().range(), 1..=10);
+
+        let magic = MagicDice::roll();
+        assert_eq!(magic.range(), 1..=100);
+
+        let highest = PickHighest(Many(vec![d10, d10]));
+        assert_eq!(highest.range(), 1..=10);
+
+        let lowest = PickLowest(Many(vec![d10, d10]));
+        assert_eq!(lowest.range(), 1..=10);
     }
 }
 

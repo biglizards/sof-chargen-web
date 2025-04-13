@@ -24,6 +24,8 @@ pub struct SoFCharGenApp {
     current_choice: Option<Choice>,
     #[serde(skip)]
     made_choice: Cell<bool>,
+    #[serde(skip)]
+    picking_roll: Cell<i8>,
 }
 
 impl Default for SoFCharGenApp {
@@ -34,6 +36,7 @@ impl Default for SoFCharGenApp {
             current_event: None,
             current_choice: None,
             made_choice: Default::default(),
+            picking_roll: Default::default(),
         }
     }
 }
