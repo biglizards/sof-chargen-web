@@ -1,11 +1,21 @@
 use crate::character::{Character, Stat};
 use crate::dice::DiceRoll;
 use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 
 pub trait Backend {
-    fn set_stat<T: DiceRoll>(&self, stat: Stat, roll: &T);
-    fn get_stat(&self, stat: Stat) -> Option<i8>;
-    fn gain_trait(&self, description: String);
+    fn get_character_mut(&self) -> impl DerefMut<Target = Character>;
+    fn get_character(&self) -> impl Deref<Target = Character>;
+    fn set_stat(&self, stat: Stat, roll: &impl DiceRoll) {
+        // during character generation, stats may not go below 1
+        self.get_character_mut().stats[stat] = Some(roll.result().max(1));
+    }
+    fn get_stat(&self, stat: Stat) -> Option<i8> {
+        self.get_character().stats[stat]
+    }
+    fn gain_trait(&self, description: String) {
+        self.get_character_mut().traits.push(description)
+    }
 }
 
 // the backend contract effectively requires interior mutability
@@ -16,17 +26,11 @@ pub struct BaseBackend {
 }
 
 impl Backend for BaseBackend {
-    fn set_stat<T: DiceRoll>(&self, stat: Stat, new_val: &T) {
-        // during character generation, stats may not go below 1
-        self.character.borrow_mut().stats[stat] = Some(new_val.result().max(1));
-    }
-    fn get_stat(&self, stat: Stat) -> Option<i8> {
-        self.character.borrow().stats[stat]
+    fn get_character_mut(&self) -> impl DerefMut<Target=Character> {
+        self.character.borrow_mut()
     }
 
-    fn gain_trait(&self, description: String) {
-        // just don't
-        // normally you'd prompt the user for input and store it somewhere
-        println!("{}", description)
+    fn get_character(&self) -> impl Deref<Target=Character> {
+        self.character.borrow()
     }
 }

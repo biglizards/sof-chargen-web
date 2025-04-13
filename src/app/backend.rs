@@ -1,6 +1,6 @@
-use sof_chargen::dice::DiceRoll;
-use sof_chargen::{Backend, Character, Stat};
+use sof_chargen::{Backend, Character};
 use std::cell::RefCell;
+use std::ops::{Deref, DerefMut};
 use std::sync::LazyLock;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -46,15 +46,11 @@ pub static BACKEND: LazyLock<AppBackend> = LazyLock::new(|| {
 });
 
 impl Backend for AppBackend {
-    fn set_stat<T: DiceRoll>(&self, stat: Stat, roll: &T) {
-        self.character.borrow_mut().stats[stat] = Some(roll.result().max(1));
-        println!("{}", roll.render());
-    }
-    fn get_stat(&self, stat: Stat) -> Option<i8> {
-        self.character.borrow().stats[stat]
+    fn get_character_mut(&self) -> impl DerefMut<Target = Character> {
+        self.character.borrow_mut()
     }
 
-    fn gain_trait(&self, description: String) {
-        self.character.borrow_mut().traits.push(description);
+    fn get_character(&self) -> impl Deref<Target = Character> {
+        self.character.borrow()
     }
 }
