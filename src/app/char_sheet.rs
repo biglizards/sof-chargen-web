@@ -1,6 +1,7 @@
 use crate::SoFCharGenApp;
 use crate::app::AppTab;
 use crate::app::backend::BACKEND;
+use crate::gui_event::GUIEvent;
 use egui::{Layout, RichText, Slider, Ui};
 use sof_chargen::ipc::Selection;
 use sof_chargen::ipc::{Choice, PickRoll};
@@ -8,34 +9,18 @@ use sof_chargen::{CORE_STATS, Character, Stat, event};
 
 impl SoFCharGenApp {
     fn choose(&self, i: usize) {
-        match &self.current_choice {
-            Some(Choice::Selection(s)) => s.chosen.set(i),
-            _ => panic!("attempted to choose when there is no choice!"),
-        }
-        self.made_choice.set(true);
+        self.current_gui_event.set(Some(GUIEvent::Choose(i)));
     }
 
     fn submit_trait(&mut self) {
-        if self.current_event.is_some() {
-            self.log_choice(&self.trait_submission);
-        }
-        match &self.current_choice {
-            Some(Choice::String(t)) => {
-                t.chosen.set(std::mem::take(&mut self.trait_submission));
-            }
-            _ => panic!("attempted to choose when there is no choice!"),
-        }
-        self.made_choice.set(true);
+        self.current_gui_event
+            .set(Some(GUIEvent::SubmitTrait(std::mem::take(
+                &mut self.trait_submission,
+            ))));
     }
 
     fn pick_roll(&self, choice: i8) {
-        match &self.current_choice {
-            Some(Choice::PickRoll(p)) => {
-                p.chosen.set(choice);
-            }
-            _ => panic!("attempted to pick roll when there is no choice!")
-        }
-        self.made_choice.set(true);
+        self.current_gui_event.set(Some(GUIEvent::PickRoll(choice)));
     }
 
     fn stat_box(&self, ui: &mut Ui, stat: Stat) {

@@ -2,6 +2,7 @@
 // - state needed to run the web/app interface
 
 use crate::app::backend::BACKEND;
+use crate::gui_event::GUIEvent;
 use egui::os::OperatingSystem;
 use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Stat};
@@ -10,35 +11,19 @@ use std::cell::Cell;
 mod backend;
 mod char_sheet;
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(default)] // if we add new fields, give them default values when deserializing old state
+#[derive(Default)]
 pub struct SoFCharGenApp {
     tab: AppTab,
 
-    #[serde(skip)]
-    trait_submission: String,
-    #[serde(skip)]
-    current_event: Option<Box<dyn Iterator<Item = Choice>>>,
-    #[serde(skip)]
-    current_choice: Option<Choice>,
-    #[serde(skip)]
-    made_choice: Cell<bool>,
-    #[serde(skip)]
-    picking_roll: Cell<i8>,
-}
+    // state of UI elements which persists between frames:
+    picking_roll: Cell<i8>, // selecting a number to roll when using prophetic stars
+    trait_submission: String, // any time the user is entering a string
 
-impl Default for SoFCharGenApp {
-    fn default() -> Self {
-        Self {
-            trait_submission: String::new(),
-            tab: AppTab::Sheet,
-            current_event: None,
-            current_choice: None,
-            made_choice: Default::default(),
-            picking_roll: Default::default(),
-        }
-    }
+    current_event: Option<Box<dyn Iterator<Item = Choice>>>,
+    current_choice: Option<Choice>,
+
+    // should replace made_choice
+    current_gui_event: Cell<Option<GUIEvent>>,
 }
 
 impl SoFCharGenApp {
@@ -53,12 +38,6 @@ impl SoFCharGenApp {
             // desktop screens have enough real estate for this
             _ => 2.0,
         });
-
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
 
         Default::default()
     }
@@ -94,23 +73,71 @@ impl SoFCharGenApp {
     }
 }
 
+impl SoFCharGenApp {
+    fn apply_event(&mut self, event: GUIEvent) {
+        let should_advance = event.should_advance();
+
+        match event {
+            GUIEvent::Choose(i) => match &self.current_choice {
+                Some(Choice::Selection(s)) => s.chosen.set(i),
+                _ => panic!("attempted to choose when there is no choice!"),
+            },
+            GUIEvent::SubmitTrait(submission) => {
+                if self.current_event.is_some() {
+                    self.log_choice(&submission);
+                }
+
+                match &self.current_choice {
+                    Some(Choice::String(t)) => {
+                        t.chosen.set(submission);
+                    }
+                    _ => panic!("attempted to choose when there is no choice!"),
+                }
+            }
+            GUIEvent::PickRoll(choice) => match &self.current_choice {
+                Some(Choice::PickRoll(p)) => {
+                    p.chosen.set(choice);
+                }
+                _ => panic!("attempted to pick roll when there is no choice!"),
+            },
+
+            GUIEvent::ResetAll => {}
+        }
+
+        if should_advance {
+            self.advance_event();
+        }
+    }
+
+    fn handle_ui_events(&mut self) {
+        match self.current_gui_event.take() {
+            None => {}
+            Some(e) => self.apply_event(e),
+        }
+
+        if self.current_event.is_some() && self.current_choice.is_none() {
+            self.advance_event()
+        }
+    }
+
+    fn advance_event(&mut self) {
+        self.current_choice = None;
+        self.current_choice = self.current_event.as_mut().unwrap().next();
+        if self.current_choice.is_none() {
+            self.current_event = None;
+        }
+    }
+}
+
 impl eframe::App for SoFCharGenApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.render(ctx);
-        if self.made_choice.take() || self.current_event.is_some() && self.current_choice.is_none()
-        {
-            self.current_choice = None;
-            self.current_choice = self.current_event.as_mut().unwrap().next();
-            if self.current_choice.is_none() {
-                self.current_event = None;
-            }
-        }
+        self.handle_ui_events();
     }
 
     /// Called by the framework to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, eframe::APP_KEY, self);
         eframe::set_value(storage, backend::BACKEND_KEY, &*BACKEND);
     }
 }
@@ -119,4 +146,10 @@ impl eframe::App for SoFCharGenApp {
 enum AppTab {
     Sheet,
     DEMode,
+}
+
+impl Default for AppTab {
+    fn default() -> Self {
+        Self::Sheet
+    }
 }

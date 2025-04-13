@@ -2,4 +2,6 @@
 
 mod app;
 mod ipc;
+mod gui_event;
+
 pub use app::SoFCharGenApp;
