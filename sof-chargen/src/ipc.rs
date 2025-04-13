@@ -18,7 +18,7 @@ pub struct Choosable {
 impl Choosable {
     // there isn't really a downside to doing this early, since any user-facing interface
     // is going to have to render it to a string at some point
-    pub fn from<T: Debug>(t: &T) -> Self {
+    pub fn from(t: &impl Debug) -> Self {
         Self {
             description: format!("{:?}", t),
         }

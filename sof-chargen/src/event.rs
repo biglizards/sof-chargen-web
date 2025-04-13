@@ -4,7 +4,7 @@ use crate::dice::{DiceRoll, MagicDice, d100};
 use crate::ipc::Choice;
 use crate::{CORE_STATS, choose, choose_vec, input_trait, roll};
 
-pub gen fn prosperous_constellations<T: Backend>(backend: &T) -> Choice {
+pub gen fn prosperous_constellations(backend: &impl Backend) -> Choice {
     // reroll luck
     let new_luck = d100().result();
     // choice: keep either value
@@ -19,7 +19,7 @@ pub gen fn prosperous_constellations<T: Backend>(backend: &T) -> Choice {
     backend.gain_trait(trt);
 }
 
-pub gen fn pick_stat<T: Backend>(backend: &T) -> Choice {
+pub gen fn pick_stat(backend: &impl Backend) -> Choice {
     let core_stat = choose_vec!(
         "Pick a core stat to roll next",
         CORE_STATS
@@ -50,7 +50,7 @@ pub gen fn pick_stat<T: Backend>(backend: &T) -> Choice {
     }
 }
 
-pub fn roll_magic<T: Backend>(backend: &T) {
+pub fn roll_magic(backend: &impl Backend) {
     let roll = MagicDice::roll();
     if roll.result() >= 100 {
         println!("You died during character creation!");
@@ -58,11 +58,11 @@ pub fn roll_magic<T: Backend>(backend: &T) {
 
     backend.set_stat(Stat::Magic, &roll);
 }
-pub fn roll_luck<T: Backend>(backend: &T) {
+pub fn roll_luck(backend: &impl Backend) {
     backend.set_stat(Stat::Luck, &d100());
 }
 
-pub fn roll_core_stats<T: Backend>(backend: &T) -> impl Iterator<Item = Choice> {
+pub fn roll_core_stats(backend: &impl Backend) -> impl Iterator<Item = Choice> {
     pick_stat(backend)
         .chain(pick_stat(backend))
         .chain(pick_stat(backend))
