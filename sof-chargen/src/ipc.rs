@@ -1,3 +1,4 @@
+use crate::dice::DiceRoll;
 use std::cell::Cell;
 use std::fmt::Debug;
 use std::rc::Rc;
