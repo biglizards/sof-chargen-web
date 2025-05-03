@@ -2,7 +2,8 @@
 pub enum GUIEvent {
     Choose(usize),
     SubmitTrait(String),
-    PickRoll(i8),
+    PickRoll(Option<i8>),
+    QuestionAnswer(bool),
     ResetAll,
 }
 
@@ -12,7 +13,7 @@ impl GUIEvent {
             self,
             // these are the gui events corresponding to IPCs
             // ie thees ones should cause the event iter to advance now that we're done responding
-            Self::Choose(_) | Self::SubmitTrait(_) | Self::PickRoll(_)
+            Self::Choose(_) | Self::SubmitTrait(_) | Self::PickRoll(_) | Self::QuestionAnswer(_)
         )
     }
 }

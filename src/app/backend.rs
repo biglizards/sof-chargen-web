@@ -9,6 +9,7 @@ use epi::Storage;
 pub static BACKEND_KEY: &str = "backend";
 
 #[derive(Default, serde::Deserialize, serde::Serialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct AppBackend {
     pub character: RefCell<Character>,
     pub log: RefCell<String>,
@@ -37,12 +38,19 @@ fn get_string_from_storage(key: &str) -> Option<String> {
 //   but gen blocks can only hold references to things with lifetimes as long as their own
 // Since I don't know how long the lifetime of the Box<Dyn Event> held in current_event,
 //   I can't give it a reference any shorter than 'static
-// (I tried to constrain the lifetime to be the same as the App,
-//  but couldn't figure out how to name that lifetime in a sane way)
+// You can name the lifetime, but that then requires that AppBackend is borrowed for the lifetime
+//   of the iterator, which doesn't work since we need to access it every frame
+static BACKEND_STR: LazyLock<String> = LazyLock::new(|| {
+    // the string is also a static because the backend holds the character, which holds careers,
+    // which have names and those names are static strings (even though they're serialised)
+    // really i should replace all the strings with enums and have a lookup table for the strings
+    // (since that'd be needed for supporting multiple languages anyway)
+    // but this isn't the worst thing in the world
+    get_string_from_storage(BACKEND_KEY).unwrap_or_else(|| Default::default())
+});
+
 pub static BACKEND: LazyLock<AppBackend> = LazyLock::new(|| {
-    get_string_from_storage(BACKEND_KEY)
-        .map(|value| ron::from_str(&value).unwrap_or_default())
-        .unwrap_or_default()
+    ron::from_str(&*BACKEND_STR).unwrap_or_default()
 });
 
 impl Backend for AppBackend {

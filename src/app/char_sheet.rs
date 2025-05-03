@@ -1,11 +1,28 @@
-use crate::SoFCharGenApp;
-use crate::app::AppTab;
 use crate::app::backend::BACKEND;
+use crate::app::AppTab;
 use crate::gui_event::GUIEvent;
-use egui::{Layout, RichText, Slider, Ui};
-use sof_chargen::ipc::Selection;
+use crate::gui_event::GUIEvent::QuestionAnswer;
+use crate::SoFCharGenApp;
+use egui::{Align, Layout, RichText, Slider, Ui};
 use sof_chargen::ipc::{Choice, PickRoll};
-use sof_chargen::{CORE_STATS, Character, Stat, event};
+use sof_chargen::ipc::{Question, Selection};
+use sof_chargen::{event, Backend, Character, Stat, CORE_STATS};
+
+fn present<T: std::fmt::Display>(thing: Option<T>) -> String {
+    match thing {
+        None => "-".to_owned(),
+        Some(t) => format!("{}", t),
+    }
+}
+
+macro_rules! left_justify_column {
+    ($ui:ident, $n:literal, $($e: expr),* $(,)?) => {
+        $ui.columns($n, |columns| {
+            let mut i = 0;
+            $(columns[{i = i + 1; i - 1}].with_layout(Layout::top_down(Align::LEFT), $e));*
+        })
+    };
+}
 
 impl SoFCharGenApp {
     fn choose(&self, i: usize) {
@@ -19,7 +36,7 @@ impl SoFCharGenApp {
             ))));
     }
 
-    fn pick_roll(&self, choice: i8) {
+    fn pick_roll(&self, choice: Option<i8>) {
         self.current_gui_event.set(Some(GUIEvent::PickRoll(choice)));
     }
 
@@ -70,6 +87,21 @@ impl SoFCharGenApp {
             self.choice_buttons(ui, s);
         });
     }
+    fn question_buttons(&self, ui: &mut Ui, question: &Question) {
+        ui.horizontal_wrapped(|ui| {
+            if ui.button("yes").clicked() {
+                self.current_gui_event.set(Some(QuestionAnswer(true)));
+            } else if ui.button("no").clicked() {
+                self.current_gui_event.set(Some(QuestionAnswer(false)));
+            }
+        });
+    }
+    fn question_window(&self, ctx: &egui::Context, q: &Question) {
+        egui::Window::new("Choice").show(ctx, |ui| {
+            ui.label(&q.description);
+            self.question_buttons(ui, q);
+        });
+    }
 
     fn pick_roll_slider(&self, ui: &mut Ui, p: &PickRoll) {
         let mut value = self.picking_roll.get();
@@ -77,9 +109,9 @@ impl SoFCharGenApp {
         self.picking_roll.set(value);
         ui.horizontal(|ui| {
             if ui.button("Submit").clicked() {
-                self.pick_roll(value);
+                self.pick_roll(Some(value));
             } else if ui.button("Roll").clicked() {
-                self.pick_roll(p.roll.result());
+                self.pick_roll(None);
             }
         });
     }
@@ -93,7 +125,7 @@ impl SoFCharGenApp {
         // first row: name, [blank], luck, magic
         ui.columns(4, |columns| {
             columns[0].text_edit_singleline(&mut BACKEND.character.borrow_mut().name);
-            // luck and magic
+            columns[1].label(format!("Stamina: {}", self.get_stat_str(Stat::Stamina)));
             columns[2].label(format!("Magic: {}", self.get_stat_str(Stat::Magic)));
             columns[3].label(format!("Luck: {}", self.get_stat_str(Stat::Luck)));
         });
@@ -106,6 +138,32 @@ impl SoFCharGenApp {
         });
 
         ui.separator();
+    }
+
+    fn history(&self, ui: &mut Ui) {
+        let char = BACKEND.get_character();
+
+        left_justify_column!(ui, 4,
+            |ui: &mut Ui| ui.label(format!("Culture: {}", present(char.culture))),
+            |ui: &mut Ui| ui.label(format!("Faith: {}", present(char.faith))),
+            |ui: &mut Ui| ui.label(format!(
+                    "Location: {}",
+                    present(char.birth_location.as_ref().map(|l| &l.name))
+                )),
+            |ui: &mut Ui| ui.label(format!("Omen: {}", present(char.omen)))
+        );
+
+        left_justify_column!(ui, 4,
+            |ui: &mut Ui| ui.label(present(char.careers.get(0))),
+            |ui: &mut Ui| ui.label(present(char.careers.get(1))),
+            |ui: &mut Ui| ui.label(present(char.careers.get(2))),
+            |ui: &mut Ui| ui.label(present(char.careers.get(3))),
+        );
+
+        left_justify_column!(ui, 4,
+            |ui: &mut Ui| ui.label(format!("Rank: {}", present(char.rank))),
+            |ui: &mut Ui| ui.label(format!("Affiliation: {}", present(char.affiliation))),
+        );
     }
 
     fn traits(&self, ui: &mut egui::Ui) {
@@ -131,17 +189,29 @@ impl SoFCharGenApp {
         if ui.button("Roll Magic and Luck").clicked() {
             event::roll_magic(&*BACKEND);
             event::roll_luck(&*BACKEND);
+            event::roll_stamina(&*BACKEND);
         }
         if ui.button("Reset").clicked() {
             *BACKEND.character.borrow_mut() = Character {
                 stats: Default::default(),
                 name: "Enter Name".to_string(),
                 traits: vec![],
+                omen: None,
+                ..Default::default()
             };
             self.reset_log();
         }
         if ui.button("Pick a Star").clicked() {
-            self.current_event = Some(Box::new(event::prosperous_constellations(&*BACKEND)));
+            self.current_event = Some(Box::new(event::pick_omens(&*BACKEND)));
+        }
+        if ui.button("Funny Test").clicked() {
+            self.current_event = Some(Box::new(event::test_pick_dice(&*BACKEND)));
+        }
+        if ui.button("roll birth location").clicked() {
+            event::roll_location_of_birth(&*BACKEND);
+        }
+        if ui.button("affiliation_rank_careers").clicked() {
+            self.current_event = Some(Box::new(event::affiliation_rank_careers(&*BACKEND)));
         }
         ui.separator();
     }
@@ -152,6 +222,7 @@ impl SoFCharGenApp {
             ui.heading("SoF Chargen");
 
             self.stats(ui);
+            self.history(ui);
 
             self.traits(ui);
 
@@ -185,6 +256,9 @@ impl SoFCharGenApp {
                         Some(Choice::PickRoll(p)) => {
                             ui.label(p.description);
                         }
+                        Some(Choice::Question(q)) => {
+                            ui.label(&q.description);
+                        }
                         None => {}
                     }
                 });
@@ -201,6 +275,7 @@ impl SoFCharGenApp {
                     Some(Choice::Selection(s)) => self.choice_window(ctx, s),
                     Some(Choice::String(t)) => self.trait_window(ctx, t.description),
                     Some(Choice::PickRoll(p)) => self.pick_roll_window(ctx, p),
+                    Some(Choice::Question(q)) => self.question_window(ctx, q),
                     None => {}
                 }
 

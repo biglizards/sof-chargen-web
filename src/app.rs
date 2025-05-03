@@ -49,7 +49,7 @@ impl SoFCharGenApp {
         "-".to_string()
     }
 
-    fn get_current_prompt(&self) -> Option<&'static str> {
+    fn get_current_prompt(&self) -> Option<&str> {
         match &self.current_choice {
             None => None,
             Some(o) => Some(o.description()),
@@ -88,17 +88,17 @@ impl SoFCharGenApp {
                 }
 
                 match &self.current_choice {
-                    Some(Choice::String(t)) => {
-                        t.chosen.set(submission);
-                    }
+                    Some(Choice::String(t)) => t.chosen.set(submission),
                     _ => panic!("attempted to choose when there is no choice!"),
                 }
             }
             GUIEvent::PickRoll(choice) => match &self.current_choice {
-                Some(Choice::PickRoll(p)) => {
-                    p.chosen.set(choice);
-                }
+                Some(Choice::PickRoll(p)) => p.chosen.set(choice),
                 _ => panic!("attempted to pick roll when there is no choice!"),
+            },
+            GUIEvent::QuestionAnswer(a) => match &self.current_choice {
+                Some(Choice::Question(q)) => q.chosen.set(a),
+                _ => panic!("attempted to answer a question when none were posed!"),
             },
 
             GUIEvent::ResetAll => {}
