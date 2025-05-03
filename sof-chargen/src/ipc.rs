@@ -2,7 +2,6 @@ use crate::dice::DiceRoll;
 use std::cell::Cell;
 use std::fmt::Debug;
 use std::rc::Rc;
-
 // An API for implementing the axiom of choice by presenting a vector of options to a user
 // - can select a thing from a vector of things
 // - those things need not be copy/clone
@@ -46,13 +45,19 @@ pub struct TraitChoice {
 pub struct PickRoll {
     pub description: &'static str,
     pub roll: Box<dyn DiceRoll>,
-    pub chosen: Rc<Cell<i8>>,
+    pub chosen: Rc<Cell<Option<i8>>>,
+}
+
+pub struct Question {
+    pub description: String,
+    pub chosen: Rc<Cell<bool>>,
 }
 
 pub enum Choice {
     Selection(Selection),
     String(TraitChoice),
     PickRoll(PickRoll),
+    Question(Question),
 }
 
 impl From<Selection> for Choice {
@@ -72,11 +77,12 @@ impl From<PickRoll> for Choice {
 }
 
 impl Choice {
-    pub fn description(&self) -> &'static str {
+    pub fn description(&self) -> &str {
         match &self {
             Choice::Selection(s) => s.description,
             Choice::String(t) => t.description,
             Choice::PickRoll(p) => p.description,
+            Choice::Question(q) => &q.description,
         }
     }
 }
@@ -137,14 +143,14 @@ macro_rules! input_trait {
 macro_rules! pick_roll {
     ($description: literal, $roll: expr) => {{
         let roll = $roll;
-        let chosen = std::rc::Rc::from(std::cell::Cell::new(0));
+        let chosen = std::rc::Rc::from(std::cell::Cell::new(None));
         yield crate::ipc::PickRoll {
             description: $description,
             roll: Box::new(roll.clone()),
             chosen: chosen.clone(),
         }
         .into();
-        crate::dice::PickedRoll(roll, chosen.take())
+        chosen.take()
     }};
 }
 
@@ -154,11 +160,31 @@ macro_rules! pick_roll {
 macro_rules! maybe_roll {
     ($description: literal, $backend: ident, $($tail:tt)*) => {{
         let roll = roll!($($tail)*);
-        if matches!($backend.get_omen(), Some(BirthOmen::PropheticSigns)) {
-            pick_roll!($description, roll)
-        } else {
-            crate::dice::PickedRoll(roll, roll.result())
+        match $backend.get_omen() {
+            Some(BirthOmen::PropheticSigns(charges)) if charges != 0 => {
+                match pick_roll!($description, roll) {
+                    None => crate::dice::PickedRoll(roll, roll.result()),
+                    Some(i) => {
+                        $backend.set_omen(BirthOmen::PropheticSigns(charges-1));
+                        crate::dice::PickedRoll(roll, i)
+                    },
+                }
+            }
+            _ => crate::dice::PickedRoll(roll, roll.result()),
         }
+    }};
+}
+
+#[macro_export]
+macro_rules! ask {
+    ($description: expr) => {{
+        let answer = Rc::new(Cell::new(false));
+        let question = Choice::Question(Question {
+            description: $description,
+            chosen: answer.clone(),
+        });
+        yield question;
+        answer.get()
     }};
 }
 
@@ -172,7 +198,8 @@ mod tests {
                 None => break,
                 Some(Choice::String(t)) => t.chosen.set(String::from("example")),
                 Some(Choice::Selection(s)) => s.chosen.set(0),
-                Some(Choice::PickRoll(p)) => p.chosen.set(*p.roll.range().end()),
+                Some(Choice::PickRoll(p)) => p.chosen.set(Some(*p.roll.range().end())),
+                Some(Choice::Question(q)) => q.chosen.set(true),
             }
         }
     }

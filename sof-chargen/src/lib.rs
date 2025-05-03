@@ -4,13 +4,16 @@
 extern crate enum_map;
 
 pub use backend::Backend;
-pub use character::{CORE_STATS, Character, Stat};
+pub use character::{BirthOmen, CORE_STATS, Character, Stat};
 
 mod backend;
 mod character;
 pub mod dice;
 pub mod event;
 pub mod ipc;
+
+pub mod data;
+
 /*
  ok so rough structure of chargen
  - rolling core stats

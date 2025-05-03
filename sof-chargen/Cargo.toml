@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 enum-map =  { version = "2.7.3", features = ["serde"] }
-getrandom = { version = "0.2", features = ["js"] }
 rand = "0.8.5"
 serde = { version = "1.0.216", features = ["derive"] }
-async-trait = "0.1.83"
+subenum = "1.1.2"

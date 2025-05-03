@@ -1,5 +1,15 @@
+use crate::data::careers::{Affiliation, Career};
+use crate::data::locations::{Culture, Faith, Location};
+use crate::data::perks::Perks;
 use enum_map::EnumMap;
 use std::fmt;
+use std::fmt::{Display, Formatter};
+use crate::character::CheckResult::{CriticalFailure, CriticalSuccess, ExtremeSuccess, Failure, HardSuccess, Success};
+
+// spans the numbers 0..=100
+// in some cases only 1..=100 are valid, though
+type DiceT = i8;
+
 
 #[derive(Debug, Enum, Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Stat {
@@ -28,11 +38,14 @@ pub enum Stat {
     Lore,
     Observe,
 
+    // non-skill stats
     Magic,
     Luck,
+    Stamina,
+    Speed,
 }
 
-impl fmt::Display for Stat {
+impl Display for Stat {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
@@ -53,9 +66,92 @@ impl Stat {
     }
 }
 
+#[derive(Debug, Copy, Clone, serde::Deserialize, serde::Serialize)]
+pub enum BirthOmen {
+    ProsperousConstellations,
+    PropheticSigns(usize),
+    PracticallyMinded,
+    ShootingStar,
+    PortentsOfDoom,
+}
+
+pub const BIRTH_OMENS: [BirthOmen; 5] = [
+    BirthOmen::ProsperousConstellations,
+    BirthOmen::PropheticSigns(2), // stars with two charges
+    BirthOmen::PracticallyMinded,
+    BirthOmen::ShootingStar,
+    BirthOmen::PortentsOfDoom,
+];
+
+impl Display for BirthOmen {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            BirthOmen::ProsperousConstellations => write!(f, "Prosperous Constellations"),
+            BirthOmen::PropheticSigns(0) => write!(f, "Prophetic Signs"),
+            BirthOmen::PropheticSigns(uses) => write!(f, "Prophetic Signs (uses: {})", uses),
+            BirthOmen::PracticallyMinded => write!(f, "Practically-Minded"),
+            BirthOmen::ShootingStar => write!(f, "Shooting Star"),
+            BirthOmen::PortentsOfDoom => write!(f, "Portents of Doom"),
+        }
+    }
+}
+
 #[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub struct Character {
-    pub stats: EnumMap<Stat, Option<i8>>,
+    pub stats: EnumMap<Stat, Option<DiceT>>,
     pub name: String,
     pub traits: Vec<String>,
+    pub omen: Option<BirthOmen>,
+    pub perks: Perks,
+    pub birth_location: Option<Location>,
+
+    pub culture: Option<Culture>,
+    pub faith: Option<Faith>,
+
+    pub affiliation: Option<Affiliation>,
+    pub careers: Vec<Career>, // you can have up to 4 careers i think
+    pub rank: Option<DiceT>,
+    pub ivory_dice: usize,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+enum CheckResult {
+    CriticalFailure = 0,
+    Failure = 1,
+    Success = 2,
+    HardSuccess = 3,
+    ExtremeSuccess = 4,
+    CriticalSuccess = 5,
+}
+
+fn check(to_beat: u64, roll: u64) -> CheckResult {
+    match roll {
+        1..=5 => CriticalSuccess,
+        96..=100 => CriticalFailure,
+        _ if roll*4 <= to_beat => ExtremeSuccess,
+        _ if roll*2 <= to_beat => HardSuccess,
+        _ if roll*1 <= to_beat => Success,
+        _ => Failure
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::dice::DiceRoll;
+    use super::*;
+    #[test]
+    fn test_check() {
+        assert_eq!(check(50, 2), CriticalSuccess);
+        assert_eq!(check(50, 5), CriticalSuccess);
+        assert_eq!(check(50, 96), CriticalFailure);
+        assert_eq!(check(50, 100), CriticalFailure);
+        assert_eq!(check(50, 50), Success);
+        assert_eq!(check(50, 51), Failure);
+        assert_eq!(check(50, 26), Success);
+        assert_eq!(check(50, 25), HardSuccess);
+        assert_eq!(check(50, 13), HardSuccess);
+        assert_eq!(check(50, 12), ExtremeSuccess);
+        assert_ne!(check(100, crate::roll!(1 d 100).result() as u64), Failure);
+    }
 }
