@@ -330,8 +330,8 @@ macro_rules! roll {
     ($i:literal) => {$i};
     ($i:ident) => {$i};
     (($($tail:tt)*)) => {roll!($($tail)*)};
-    ($q:tt d 100) => {crate::dice::D100Pool::roll($q)};
     (1 d $d:literal) => {crate::dice::D::<$d>::roll()};
+    ($q:tt d 100) => {crate::dice::D100Pool::roll($q)};
     ($q:tt d $d:literal) => {crate::dice::Many::<$d>::roll($q)};
     (kh $tail:tt) => {crate::dice::PickHighest(roll!$tail)};
     (kl $tail:tt) => {crate::dice::PickLowest(roll!$tail)};
@@ -341,7 +341,6 @@ macro_rules! roll {
 
 #[cfg(test)]
 mod test {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
     #[test]
@@ -353,8 +352,8 @@ mod test {
         let _: Many<6> = roll!(2 d 6);
         let _: PickHighest<Many<6>> = roll!(kh(2 d 6));
         let _: PickHighest<D100Pool> = roll!(kh(2 d 100));
-        let _: PickLowest<D100Pool> = roll!(kl(1 d 100));
-        let _: D100Pool = roll!(1 d 100);
+        let _: PickLowest<D100Pool> = roll!(kl(2 d 100));
+        let _: D<100> = roll!(1 d 100);
         let _: Add<D<6>, i8> = roll!((1 d 6) + 1);
         let _: Add<i8, D<6>> = roll!(1 + 1 d 6);
     }
