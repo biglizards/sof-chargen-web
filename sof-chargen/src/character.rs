@@ -1,15 +1,16 @@
+use crate::character::CheckResult::{
+    CriticalFailure, CriticalSuccess, ExtremeSuccess, Failure, HardSuccess, Success,
+};
 use crate::data::careers::{Affiliation, Career};
 use crate::data::locations::{Culture, Faith, Location};
 use crate::data::perks::Perks;
 use enum_map::EnumMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::character::CheckResult::{CriticalFailure, CriticalSuccess, ExtremeSuccess, Failure, HardSuccess, Success};
 
 // spans the numbers 0..=100
 // in some cases only 1..=100 are valid, though
 type DiceT = i8;
-
 
 #[derive(Debug, Enum, Copy, Clone, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Stat {
@@ -129,17 +130,17 @@ fn check(to_beat: u64, roll: u64) -> CheckResult {
     match roll {
         1..=5 => CriticalSuccess,
         96..=100 => CriticalFailure,
-        _ if roll*4 <= to_beat => ExtremeSuccess,
-        _ if roll*2 <= to_beat => HardSuccess,
-        _ if roll*1 <= to_beat => Success,
-        _ => Failure
+        _ if roll * 4 <= to_beat => ExtremeSuccess,
+        _ if roll * 2 <= to_beat => HardSuccess,
+        _ if roll * 1 <= to_beat => Success,
+        _ => Failure,
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::dice::DiceRoll;
     use super::*;
+    use crate::dice::DiceRoll;
     #[test]
     fn test_check() {
         assert_eq!(check(50, 2), CriticalSuccess);

@@ -229,7 +229,7 @@ pub fn roll_core_stats(backend: &impl Backend) -> impl Iterator<Item = Choice> {
 // Step 1: Location of Birth
 pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
     let rank = backend.get_character().rank.unwrap_or_default();
-    
+
     let omen = choose_vec!(consume "Pick your birth omen", BIRTH_OMENS);
     backend.set_omen(omen);
     match omen {
@@ -305,9 +305,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
                     MagicDice::roll().result(),
                 ),
             );
-            backend.set_rank(
-                max(rank - d3(), 0)
-            );
+            backend.set_rank(max(rank - d3(), 0));
             run!(roll_affiliation(backend, 1));
         }
     };
@@ -323,14 +321,7 @@ pub gen fn test_pick_dice<T: Backend>(backend: &T) -> Choice {
 }
 
 pub fn roll_location_of_birth(backend: &impl Backend) {
-    let loc = crate::data::locations::location_table(
-        (
-            d6(),
-            d6(),
-            d6(),
-        ),
-        d3(),
-    );
+    let loc = crate::data::locations::location_table((d6(), d6(), d6()), d3());
 
     // ok just to speed things up a bit we're doing step 2 here too
     if loc.far_afield {
