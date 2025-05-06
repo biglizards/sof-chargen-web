@@ -48,6 +48,33 @@ pub enum CareerClass {
     Zealot,
 }
 
+impl Display for CareerClass {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Artisan
+            | Self::Beggar
+            | Self::Detective
+            | Self::Entertainer
+            | Self::Farmer
+            | Self::Guard
+            | Self::Hunter
+            | Self::Infantry
+            | Self::Knight
+            | Self::Labourer
+            | Self::Mariner
+            | Self::Noble
+            | Self::Official
+            | Self::Physician
+            | Self::Rogue
+            | Self::Scholar
+            | Self::Trader
+            | Self::Wayfarer
+            | Self::Zealot => write!(f, "{:?}", self),
+            CareerClass::ConArtist => write!(f, "Con Artist"),
+        }
+    }
+}
+
 impl CareerClass {
     fn letter(&self) -> char {
         match self {

@@ -33,29 +33,48 @@ pub trait Backend {
     }
 
     fn set_birth_location(&self, location: Location) {
-        println!("birth location: {:?}", location);
+        self.log(format!("You were born in {}.", location.name));
         self.get_character_mut().birth_location = Some(location)
     }
     fn set_culture(&self, culture: Culture) {
-        println!("culture: {:?}", culture);
+        self.log(format!("You were raised {}.", culture));
         self.get_character_mut().culture = Some(culture)
     }
     fn set_faith(&self, faith: Faith) {
-        println!("faith: {:?}", faith);
+        self.log(format!("You were taught to worship {}.", faith));
         self.get_character_mut().faith = Some(faith)
     }
 
     fn set_affiliation(&self, affiliation: Affiliation) {
-        println!("affiliation: {:?}", affiliation);
+        self.log(format!("You joined the {}", affiliation));
         self.get_character_mut().affiliation = Some(affiliation)
     }
     fn set_career(&self, career: Career) {
-        println!("career: {:?}", career);
+        self.log(format!(
+            "You spent a time working as a {}, granting you the skills of a {}.",
+            career.name, career.class
+        ));
         self.get_character_mut().careers.push(career);
     }
     fn set_rank(&self, rank: i8) {
+        let old_rank = self.get_character().rank;
+        match old_rank {
+            None => self.log(format!("Your parents lived life at rank {}.", rank)),
+            Some(i) => match rank - i {
+                0 => {}
+                1 => self.log("You gained a rank.".to_string()),
+                -1 => self.log("You fell a rank.".to_string()),
+                x if x > 0 => self.log(format!("You gained {} ranks.", x)),
+                x if x < 0 => self.log(format!("You fell {} ranks.", -x)),
+                _ => unreachable!()
+            }
+        }
         let rank = max(0, min(rank, 9)); // clamp between 0 and 9
         self.get_character_mut().rank = Some(rank);
+    }
+
+    fn log(&self, text: String) {
+        println!("{}", text);
     }
 }
 

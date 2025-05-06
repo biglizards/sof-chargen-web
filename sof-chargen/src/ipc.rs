@@ -1,6 +1,6 @@
 use crate::dice::DiceRoll;
 use std::cell::Cell;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::rc::Rc;
 // An API for implementing the axiom of choice by presenting a vector of options to a user
 // - can select a thing from a vector of things
@@ -17,9 +17,9 @@ pub struct Choosable {
 impl Choosable {
     // there isn't really a downside to doing this early, since any user-facing interface
     // is going to have to render it to a string at some point
-    pub fn from(t: &impl Debug) -> Self {
+    pub fn from(t: &impl Display) -> Self {
         Self {
-            description: format!("{:?}", t),
+            description: t.to_string(),
         }
     }
 }
@@ -190,6 +190,7 @@ macro_rules! ask {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Formatter;
     use super::*;
 
     fn run_test(mut iter: impl Iterator<Item = Choice>) {
@@ -216,6 +217,11 @@ mod tests {
     gen fn test_no_copy() -> Choice {
         #[derive(Debug, Eq, PartialEq)]
         struct Foo(i32);
+        impl Display for Foo {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                write!(f, "Foo")
+            }
+        }
 
         let mut vec = vec![Foo(1), Foo(2), Foo(3)];
         let choice: Foo = choose_vec!("something", vec);

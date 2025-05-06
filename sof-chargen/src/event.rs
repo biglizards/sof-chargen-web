@@ -1,8 +1,6 @@
 use crate::backend::Backend;
 use crate::character::{BIRTH_OMENS, BirthOmen, Stat};
-use crate::data::careers::{
-    CareerTableEntry, CareerTableStar, get_affiliation, get_careers, get_rank,
-};
+use crate::data::careers::{CareerTableEntry, CareerTableStar, get_affiliation, get_careers, get_rank, Career};
 use crate::data::locations::{Culture, Faith, associated_faith, further_afield_culture};
 use crate::dice::{DiceRoll, MagicDice, d100};
 use crate::ipc::{Choice, Question};
@@ -46,6 +44,7 @@ gen fn roll_affiliation(backend: &impl Backend, mut disadvantage: usize) -> Choi
         } else {
             get_affiliation(&loc, roll!(kh((2+disadvantage) d 100)).result())
         };
+        backend.set_affiliation(affiliation);
 
         match affiliation.star(&loc) {
             CareerTableStar::None => break,
@@ -61,9 +60,11 @@ gen fn roll_affiliation(backend: &impl Backend, mut disadvantage: usize) -> Choi
                     affiliation, f
                 )) {
                     faith = f;
+                    backend.set_faith(faith);
                     break;
                 } else {
                     rank = max(rank - 1, 0);
+                    backend.set_rank(rank);
                     // we're re-rolling so reset the disadvantage
                     disadvantage = 0;
                 }
@@ -71,10 +72,6 @@ gen fn roll_affiliation(backend: &impl Backend, mut disadvantage: usize) -> Choi
             _ => unreachable!("Affiliations should never require a culture"),
         };
     }
-
-    backend.set_faith(faith);
-    backend.set_rank(rank);
-    backend.set_affiliation(affiliation);
 }
 
 // macro instead of a function because we would need to return a value from a gen fn
@@ -114,6 +111,14 @@ macro_rules! handle_star {
     };
 }
 
+fn is_eligible(culture: Culture, career_table_star: CareerTableStar) -> bool {
+    match career_table_star {
+        CareerTableStar::None => true,
+        CareerTableStar::NeedsFaith(_) => true,
+        CareerTableStar::NeedsFaithAndCulture(_, c) => culture == c,
+    }
+}
+
 gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
     let char = backend.get_character();
     let loc = char.birth_location.clone().unwrap();
@@ -132,16 +137,27 @@ gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
                 handle_star!(star, career, backend, culture, faith)
             }
             CareerTableEntry::Careers((c1, s1), (c2, s2)) => {
-                let career = choose!("Pick your guardians' career:", c1, c2);
+                let careers: Vec<Career> = [(c1, s1), (c2, s2)]
+                    .iter()
+                    .filter(|(_, s)| is_eligible(culture, *s))
+                    .map(|&(c, _)| c)
+                    .collect();
+                let career = if careers.len() == 1 {
+                    *careers.first().unwrap()
+                } else {
+                    choose!("Pick your guardians' career:", c1, c2)
+                };
                 let star = if career == c1 { s1 } else { s2 };
                 handle_star!(star, career, backend, culture, faith)
             }
             CareerTableEntry::RemainAtRank(r) => {
                 rank = r;
+                backend.set_rank(rank);
                 // rerun the loop to pick a career for that rank
             }
             CareerTableEntry::ChangeAffiliation(a) => {
                 affiliation = a;
+                backend.set_affiliation(affiliation)
                 // rerun the loop to pick a new career for that affiliation
             }
             CareerTableEntry::RerollWithDisadvantage | CareerTableEntry::Reroll => {
@@ -164,9 +180,6 @@ gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
         }
     };
     backend.set_career(career);
-    backend.set_affiliation(affiliation);
-    backend.set_rank(rank);
-    backend.set_faith(faith);
 }
 
 pub gen fn pick_stat(backend: &impl Backend) -> Choice {
