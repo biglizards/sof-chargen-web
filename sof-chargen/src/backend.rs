@@ -45,8 +45,11 @@ pub trait Backend {
         self.log(match self.get_character().age {
             0 if first_faith => format!("Your parents worshipped {}.", faith),
             0 => format!("Your parents converted to {}.", faith),
-            1..15 => format!("For the sake of your apprenticeship, you were raised to follow {}.", faith),
-            _ => format!("You converted to {}.", faith)
+            1..15 => format!(
+                "For the sake of your apprenticeship, you were raised to follow {}.",
+                faith
+            ),
+            _ => format!("You converted to {}.", faith),
         });
         self.get_character_mut().faith = Some(faith)
     }
@@ -66,7 +69,7 @@ pub trait Backend {
             self.get_character_mut().parents_career = Some(career);
             return;
         }
-        
+
         let (already_present, num_careers) = {
             let careers = &self.get_character().careers;
             (careers.contains(&career), careers.len())

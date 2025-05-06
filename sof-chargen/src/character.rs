@@ -111,7 +111,7 @@ pub struct Character {
     pub faith: Option<Faith>,
 
     pub affiliation: Option<Affiliation>,
-    pub parents_career : Option<Career>,
+    pub parents_career: Option<Career>,
     pub careers: Vec<Career>, // you can have up to 4 careers i think
     pub rank: Option<DiceT>,
     pub age: u16,
