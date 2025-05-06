@@ -420,3 +420,52 @@ pub gen fn affiliation_rank_careers(backend: &impl Backend) -> Choice {
     // todo i think this should actually set your PARENT's career
     // you do want to keep the affiliation and rank though those are functionally yours
 }
+
+// test scenarios
+pub mod scenarios {
+    use super::*;
+    use crate::Character;
+    use crate::data::careers::Affiliation;
+    use crate::data::locations::{CareerTable, Demographic, Location};
+    fn test_location() -> Option<Location> {
+        Some(Location {
+            name: "test location".to_string(),
+            culture: Culture::Varlish,
+            secondary_culture: Culture::Varlish,
+            faith: Faith::Accorder,
+            secondary_faith: Faith::Accorder,
+            demographic: Demographic::Urban,
+            career_table: CareerTable::ValiantEmpire,
+            far_afield: false,
+        })
+    }
+    pub fn kremish_accorder(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+        // scenario 1. You rolled a rank 3 slum folk kremish accorder
+        // you should be offered the option to convert to Gytungrug
+        *backend.get_character_mut() = Character {
+            birth_location: test_location(),
+            culture: Some(Culture::Kremish),
+            faith: Some(Faith::Accorder),
+            affiliation: Some(Affiliation::Slumfolk),
+            rank: Some(3),
+            ..Default::default()
+        };
+
+        change_rank(backend, 3)
+    }
+
+    pub fn non_kremish_accorder(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+        // scenario 2. You rolled a rank 3 slum folk valish accorder
+        // you should NOT be offered the option to convert to Gytungrug
+        *backend.get_character_mut() = Character {
+            birth_location: test_location(),
+            culture: Some(Culture::Varlish),
+            faith: Some(Faith::Accorder),
+            affiliation: Some(Affiliation::Slumfolk),
+            rank: Some(3),
+            ..Default::default()
+        };
+
+        change_rank(backend, 3)
+    }
+}
