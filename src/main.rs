@@ -7,11 +7,11 @@ mod util;
 use iced::font::Family;
 use iced::widget::Row;
 use iced::{Font, Settings, Theme};
-use sof_chargen::event::scenarios;
+use sof_chargen::event::Event;
+use sof_chargen::event::{birth, scenarios};
 use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Character, event};
 use std::borrow::Cow;
-use sof_chargen::event::Event;
 
 fn load_fonts() -> Vec<Cow<'static, [u8]>> {
     vec![
@@ -68,6 +68,7 @@ enum Message {
     RollCareers,
     DebugSlider,
     DebugScenario(i8),
+    AdvanceLifeStage,
 }
 
 impl Message {
@@ -114,17 +115,14 @@ impl App {
             Message::ResetAll => {
                 *backend.get_character_mut() = Character::default();
                 backend.log.borrow_mut().clear();
-            },
-            Message::RollStats => {
-                self.current_event = Some(Box::new(event::roll_core_stats(backend)));
-                event::roll_magic(backend);
-                event::roll_luck(backend);
-                event::roll_stamina(backend);
             }
-            Message::PickStar => self.current_event = Some(Box::new(event::pick_omens(backend))),
-            Message::RollLocation => event::roll_location_of_birth(backend),
+            Message::RollStats => {
+                self.current_event = Some(Box::new(birth::roll_core_stats(backend)));
+            }
+            Message::PickStar => self.current_event = Some(Box::new(birth::pick_omens(backend))),
+            Message::RollLocation => birth::roll_location_of_birth(backend),
             Message::RollCareers => {
-                self.current_event = Some(Box::new(event::affiliation_rank_careers(backend)))
+                self.current_event = Some(Box::new(birth::affiliation_rank_careers(backend)))
             }
             Message::SliderChanged(v) => self.dice_slider = v,
             Message::DebugSlider => {
@@ -140,6 +138,10 @@ impl App {
                     }
                     _ => println!("invalid debug scenario!"),
                 }
+            }
+            Message::AdvanceLifeStage => {
+                self.current_choice = None;
+                self.current_event = backend.next_stage();
             }
         }
 

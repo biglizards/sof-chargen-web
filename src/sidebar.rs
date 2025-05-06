@@ -1,20 +1,20 @@
+use crate::backend::AppBackend;
 use crate::{App, Message, util};
 use iced::Length;
-use iced::widget::{Column, button, row, slider, text, vertical_rule, horizontal_rule};
+use iced::widget::{Column, button, horizontal_rule, row, slider, text, vertical_rule};
 use iced::widget::{column, text_input};
+use sof_chargen::Backend;
 use sof_chargen::ipc::Choice;
 use sof_chargen::ipc::Choice::Selection;
-use crate::backend::AppBackend;
 
 impl App {
-    fn choice_input(&self) -> Column<Message> {
-        match &self.current_choice {
-            None => column![text("No choice. Press a button.")],
-            Some(Choice::String(s)) => column![
+    fn choice_input<'a>(&self, choice: &'a Choice) -> Column<'a, Message> {
+        match choice {
+            Choice::String(s) => column![
                 text(s.description),
                 text_input("type trait here", &self.trait_entry).on_input(Message::SubmitTrait)
             ],
-            Some(Selection(s)) => column![
+            Selection(s) => column![
                 text(s.description),
                 util::row(
                     s.options
@@ -23,8 +23,9 @@ impl App {
                         .map(|(i, c)| button(&*c.description).on_press(Message::Choose(i))),
                 )
                 .spacing(5)
+                .wrap()
             ],
-            Some(Choice::PickRoll(r)) => {
+            Choice::PickRoll(r) => {
                 // annoying iced quirk: sliders require T: From<u8> which precludes using i8
                 let range = r.roll.range().into_inner();
                 let range = (range.0 as i16)..=(range.1 as i16);
@@ -46,21 +47,32 @@ impl App {
                     .spacing(5)
                 ]
             }
-            Some(Choice::Question(q)) => column![
+            Choice::Question(q) => column![
                 text(&q.description),
                 row![
                     button("Yes").on_press(Message::QuestionAnswer(true)),
                     button("No").on_press(Message::QuestionAnswer(false)),
-                ].spacing(5)
+                ]
+                .spacing(5)
             ],
         }
     }
 
     pub(crate) fn sidebar(&self, backend: &AppBackend) -> Column<Message> {
-        column!(
+        column![
             text(backend.log.borrow().clone()).size(16),
             horizontal_rule(1),
-            self.choice_input().padding([20, 0])
-        )
+        ]
+        .push(if let Some(c) = &self.current_choice {
+            column![self.choice_input(c)]
+        } else {
+            column![
+                text(format!(
+                    "Current life stage: {:?}",
+                    backend.get_character().life_stage
+                )),
+                button("Advance").on_press(Message::AdvanceLifeStage)
+            ]
+        })
     }
 }

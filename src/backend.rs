@@ -1,4 +1,5 @@
-use sof_chargen::Character;
+use sof_chargen::event::Event;
+use sof_chargen::{Backend, Character};
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
 
@@ -22,5 +23,17 @@ impl sof_chargen::Backend for AppBackend {
         let mut log = self.log.borrow_mut();
         log.push('\n');
         log.push_str(&text);
+    }
+}
+
+impl AppBackend {
+    pub(crate) fn next_stage(&'static self) -> Option<Box<dyn Event>> {
+        let stage = self.get_character().life_stage;
+        if let Some((stage, event)) = stage.next(self) {
+            self.get_character_mut().life_stage = stage;
+            Some(event)
+        } else {
+            None
+        }
     }
 }

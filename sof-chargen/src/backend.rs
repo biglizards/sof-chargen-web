@@ -3,6 +3,7 @@ use crate::data::careers::{Affiliation, Career};
 use crate::data::locations::{Culture, Faith, Location};
 use crate::data::perks::Perk;
 use crate::dice::DiceRoll;
+use crate::event::stages::LifeStage;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::ops::{Deref, DerefMut};
@@ -41,11 +42,10 @@ pub trait Backend {
         self.get_character_mut().culture = Some(culture)
     }
     fn set_faith(&self, faith: Faith) {
-        let first_faith = self.get_character().faith.is_none();
-        self.log(match self.get_character().age {
-            0 if first_faith => format!("Your parents worshipped {}.", faith),
-            0 => format!("Your parents converted to {}.", faith),
-            1..15 => format!(
+        self.log(match self.get_character().life_stage {
+            LifeStage::RollStats => format!("Your parents worshipped {}.", faith),
+            LifeStage::RollParents => format!("Your parents converted to {}.", faith),
+            LifeStage::RollOmens => format!(
                 "For the sake of your apprenticeship, you were raised to follow {}.",
                 faith
             ),

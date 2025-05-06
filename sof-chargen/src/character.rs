@@ -4,6 +4,7 @@ use crate::character::CheckResult::{
 use crate::data::careers::{Affiliation, Career};
 use crate::data::locations::{Culture, Faith, Location};
 use crate::data::perks::Perks;
+use crate::event::stages::LifeStage;
 use enum_map::EnumMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -114,7 +115,7 @@ pub struct Character {
     pub parents_career: Option<Career>,
     pub careers: Vec<Career>, // you can have up to 4 careers i think
     pub rank: Option<DiceT>,
-    pub age: u16,
+    pub life_stage: LifeStage,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
