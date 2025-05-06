@@ -1,186 +1,17 @@
+mod util;
+
 use crate::backend::Backend;
-use crate::character::{BIRTH_OMENS, BirthOmen, Stat};
-use crate::data::careers::{CareerTableEntry, CareerTableStar, get_affiliation, get_careers, get_rank, Career};
-use crate::data::locations::{Culture, Faith, associated_faith, further_afield_culture};
-use crate::dice::{DiceRoll, MagicDice, d100};
-use crate::ipc::{Choice, Question};
-use crate::{CORE_STATS, ask, choose, choose_vec, maybe_roll, pick_roll, roll};
-use std::cell::Cell;
-use std::cmp::{max, min};
-use std::rc::Rc;
+use crate::character::{BirthOmen, Stat, BIRTH_OMENS};
+use crate::data::careers::{get_affiliation, get_rank, CareerTableStar};
+use crate::data::locations::{associated_faith, further_afield_culture, Culture, Faith};
+use crate::dice::{d100, DiceRoll, MagicDice};
+use crate::ipc::Choice;
+use crate::{choose_vec, maybe_roll, pick_roll, roll, run, CORE_STATS};
+use std::cmp::max;
+use util::{d6, d3};
 
-// maybe we want these to render somehow in the future?
-fn d6() -> i8 {
-    roll!(1 d 6).result()
-}
-fn d3() -> i8 {
-    roll!(1 d 3).result()
-}
+pub trait Event = Iterator<Item=Choice>;
 
-macro_rules! run {
-    ($call: expr) => {
-        for choice in $call {
-            yield choice;
-        }
-    };
-}
-
-// todo i hate this i hate this i hate it so much
-gen fn roll_affiliation(backend: &impl Backend, mut disadvantage: usize) -> Choice {
-    let char = backend.get_character();
-    let loc = char.birth_location.clone().unwrap();
-    let culture = char.culture.unwrap();
-    let mut faith = char.faith.unwrap();
-    let mut rank = char.rank.unwrap();
-    let mut affiliation;
-    drop(char);
-
-    loop {
-        // Roll 1d100 on your birthplace’s affiliation table [...]
-        // if your guardians were not members of that location’s dominant culture roll with disadvantage
-        // note from lys: if you already have disadvantage from somewhere (eg table says to) it's double
-        affiliation = if loc.culture == culture {
-            get_affiliation(&loc, roll!(kh((1+disadvantage) d 100)).result())
-        } else {
-            get_affiliation(&loc, roll!(kh((2+disadvantage) d 100)).result())
-        };
-        backend.set_affiliation(affiliation);
-
-        match affiliation.star(&loc) {
-            CareerTableStar::None => break,
-            CareerTableStar::NeedsFaith(f) => {
-                if faith == f {
-                    // no issues here, they get the affiliation
-                    break;
-                }
-                // ask if they want to convert
-                if ask!(format!(
-                    "To be a {} you must follow {}. Do you convert? \
-                                    If you don't, fall one rank and re-roll affiliation.",
-                    affiliation, f
-                )) {
-                    faith = f;
-                    backend.set_faith(faith);
-                    break;
-                } else {
-                    rank = max(rank - 1, 0);
-                    backend.set_rank(rank);
-                    // we're re-rolling so reset the disadvantage
-                    disadvantage = 0;
-                }
-            }
-            _ => unreachable!("Affiliations should never require a culture"),
-        };
-    }
-}
-
-// macro instead of a function because we would need to return a value from a gen fn
-macro_rules! handle_star {
-    ($star:ident, $career:ident, $backend:ident, $culture:ident, $faith:ident) => {
-        match $star {
-            CareerTableStar::None => break $career,
-            CareerTableStar::NeedsFaith(f) => {
-                if ask!(
-                    format!("You need to be a {f:?} to that that career. Do you convert?")
-                        .to_owned()
-                ) {
-                    $backend.set_faith(f);
-                    break $career;
-                }
-            }
-            CareerTableStar::NeedsFaithAndCulture(f, c) => {
-                if c == $culture {
-                    if f == $faith {
-                        break $career;
-                    } else {
-                        if ask!(
-                            format!("You need to be a {f:?} to that that career. Do you convert?")
-                                .to_owned()
-                        ) {
-                            $backend.set_faith(f);
-                            break $career;
-                        }
-                    }
-                } else {
-                    // todo make this a popup or something
-                    //   or better, don't even offer the option
-                    println!("You can't pick that one!")
-                }
-            }
-        }
-    };
-}
-
-fn is_eligible(culture: Culture, career_table_star: CareerTableStar) -> bool {
-    match career_table_star {
-        CareerTableStar::None => true,
-        CareerTableStar::NeedsFaith(_) => true,
-        CareerTableStar::NeedsFaithAndCulture(_, c) => culture == c,
-    }
-}
-
-gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
-    let char = backend.get_character();
-    let loc = char.birth_location.clone().unwrap();
-    let mut affiliation = char.affiliation.unwrap();
-    let culture = char.culture.unwrap();
-    let mut faith = char.faith.unwrap();
-    // drop char so we can borrow it as mut later (within handle_star)
-    drop(char);
-
-    let mut rank = max(0, min(rank, 9)); // clamp between 0 and 9
-
-    let career = loop {
-        let entry = get_careers(&loc, affiliation, rank);
-        match entry {
-            CareerTableEntry::Career(career, star) => {
-                handle_star!(star, career, backend, culture, faith)
-            }
-            CareerTableEntry::Careers((c1, s1), (c2, s2)) => {
-                let careers: Vec<Career> = [(c1, s1), (c2, s2)]
-                    .iter()
-                    .filter(|(_, s)| is_eligible(culture, *s))
-                    .map(|&(c, _)| c)
-                    .collect();
-                let career = if careers.len() == 1 {
-                    *careers.first().unwrap()
-                } else {
-                    choose!("Pick your guardians' career:", c1, c2)
-                };
-                let star = if career == c1 { s1 } else { s2 };
-                handle_star!(star, career, backend, culture, faith)
-            }
-            CareerTableEntry::RemainAtRank(r) => {
-                rank = r;
-                backend.set_rank(rank);
-                // rerun the loop to pick a career for that rank
-            }
-            CareerTableEntry::ChangeAffiliation(a) => {
-                affiliation = a;
-                backend.set_affiliation(affiliation)
-                // rerun the loop to pick a new career for that affiliation
-            }
-            CareerTableEntry::RerollWithDisadvantage | CareerTableEntry::Reroll => {
-                let disadvantage = if entry == CareerTableEntry::RerollWithDisadvantage {
-                    1
-                } else {
-                    0
-                };
-
-                // awkward limitation of gen fns - they can't return anything
-                // (and you can't get around that by passing a &mut arg)
-                // instead allow it to arbitrarily mutate the character and update our state after
-                run!(roll_affiliation(backend, disadvantage));
-
-                let char = backend.get_character();
-                faith = char.faith.unwrap();
-                affiliation = char.affiliation.unwrap();
-                rank = char.rank.unwrap();
-            }
-        }
-    };
-    backend.set_career(career);
-}
 
 pub gen fn pick_stat(backend: &impl Backend) -> Choice {
     let core_stat = choose_vec!(
@@ -229,7 +60,7 @@ pub fn roll_stamina(backend: &impl Backend) {
     backend.set_stat(Stat::Stamina, &roll!(2 d 6));
 }
 
-pub fn roll_core_stats(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+pub fn roll_core_stats(backend: &impl Backend) -> impl Event {
     pick_stat(backend)
         .chain(pick_stat(backend))
         .chain(pick_stat(backend))
@@ -262,7 +93,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
             // though whether great or terrible they could not say.
             // When rolling a die during character creation, you may choose the result up to twice.
             // Inherit your guardians’ rank, then reroll your affiliation.
-            run!(roll_affiliation(backend, 0));
+            run!(util::roll_affiliation(backend, 0));
         }
         BirthOmen::PracticallyMinded => {
             // Whatever omens were present at your birth, your guardians were practical folk who
@@ -304,7 +135,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
             // Reroll Luck, but start one rank below your guardians and reroll your affiliation.
             backend.set_stat(Stat::Luck, &roll!(1 d 100));
             backend.set_rank(max(rank - 1, 0));
-            run!(roll_affiliation(backend, 0));
+            run!(util::roll_affiliation(backend, 0));
         }
         BirthOmen::PortentsOfDoom => {
             // Without explanation, your guardians shunned you from birth,
@@ -319,13 +150,13 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
                 ),
             );
             backend.set_rank(max(rank - d3(), 0));
-            run!(roll_affiliation(backend, 1));
+            run!(util::roll_affiliation(backend, 1));
         }
     };
 
     // then we gain a career
     let rank = backend.get_character().rank.unwrap_or_default();
-    run!(change_rank(backend, rank));
+    run!(util::change_rank(backend, rank));
 }
 
 pub gen fn test_pick_dice<T: Backend>(backend: &T) -> Choice {
@@ -415,7 +246,7 @@ pub gen fn affiliation_rank_careers(backend: &impl Backend) -> Choice {
     backend.set_affiliation(affiliation);
 
     // and select a career listed at that rank for that affiliation for them to have practised
-    run!(change_rank(backend, rank));
+    run!(util::change_rank(backend, rank));
 
     // todo i think this should actually set your PARENT's career
     // you do want to keep the affiliation and rank though those are functionally yours
@@ -424,9 +255,9 @@ pub gen fn affiliation_rank_careers(backend: &impl Backend) -> Choice {
 // test scenarios
 pub mod scenarios {
     use super::*;
-    use crate::Character;
     use crate::data::careers::Affiliation;
     use crate::data::locations::{CareerTable, Demographic, Location};
+    use crate::Character;
     fn test_location() -> Option<Location> {
         Some(Location {
             name: "test location".to_string(),
@@ -439,7 +270,7 @@ pub mod scenarios {
             far_afield: false,
         })
     }
-    pub fn kremish_accorder(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+    pub fn kremish_accorder(backend: &impl Backend) -> impl Event {
         // scenario 1. You rolled a rank 3 slum folk kremish accorder
         // you should be offered the option to convert to Gytungrug
         *backend.get_character_mut() = Character {
@@ -451,10 +282,10 @@ pub mod scenarios {
             ..Default::default()
         };
 
-        change_rank(backend, 3)
+        util::change_rank(backend, 3)
     }
 
-    pub fn non_kremish_accorder(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+    pub fn non_kremish_accorder(backend: &impl Backend) -> impl Event {
         // scenario 2. You rolled a rank 3 slum folk valish accorder
         // you should NOT be offered the option to convert to Gytungrug
         *backend.get_character_mut() = Character {
@@ -466,6 +297,6 @@ pub mod scenarios {
             ..Default::default()
         };
 
-        change_rank(backend, 3)
+        util::change_rank(backend, 3)
     }
 }

@@ -1,6 +1,6 @@
 use crate::dice::DiceRoll;
 use std::cell::Cell;
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 use std::rc::Rc;
 // An API for implementing the axiom of choice by presenting a vector of options to a user
 // - can select a thing from a vector of things
@@ -178,8 +178,8 @@ macro_rules! maybe_roll {
 #[macro_export]
 macro_rules! ask {
     ($description: expr) => {{
-        let answer = Rc::new(Cell::new(false));
-        let question = Choice::Question(Question {
+        let answer = std::rc::Rc::new(core::cell::Cell::new(false));
+        let question = crate::ipc::Choice::Question(crate::ipc::Question {
             description: $description,
             chosen: answer.clone(),
         });
@@ -190,8 +190,8 @@ macro_rules! ask {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Formatter;
     use super::*;
+    use std::fmt::Formatter;
 
     fn run_test(mut iter: impl Iterator<Item = Choice>) {
         loop {

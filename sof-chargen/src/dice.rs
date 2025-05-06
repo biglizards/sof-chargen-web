@@ -103,9 +103,9 @@ impl D100Pool {
     pub fn roll(n: usize) -> Self {
         Self {
             d100s: (0..n)
-                .map(|_| rand::thread_rng().gen_range(0..=9) * 10)
+                .map(|_| rand::rng().random_range(0..=9) * 10)
                 .collect(),
-            d10: rand::thread_rng().gen_range(0..=9),
+            d10: rand::rng().random_range(0..=9),
         }
     }
 }
@@ -134,7 +134,7 @@ pub struct D<const N: i8>(i8);
 
 impl<const N: i8> D<N> {
     pub fn roll() -> Self {
-        Self(rand::thread_rng().gen_range(1..=N))
+        Self(rand::rng().random_range(1..=N))
     }
 }
 

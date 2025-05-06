@@ -1,7 +1,6 @@
 use sof_chargen::Character;
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
-use sof_chargen::dice::DiceRoll;
 
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(bound(deserialize = "'de: 'static"))]

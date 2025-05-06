@@ -1,7 +1,5 @@
-use crate::Stat;
 use crate::data::careers::Affiliation::*;
 use crate::data::locations::{CareerTable, Culture, Demographic, Faith, Location};
-use crate::data::perks::Perk;
 use std::fmt::{Display, Formatter};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, serde::Deserialize, serde::Serialize)]
@@ -629,120 +627,6 @@ pub fn get_careers(location: &Location, affiliation: Affiliation, rank: i8) -> C
                 _ => unreachable!(),
             },
         },
-    }
-}
-
-pub fn get_career_requirements() {}
-
-enum CareerClassPerkOption {
-    Perk(Perk),
-    AnyFightingStyle,
-    AnyArmsFightingStyle,
-    AnyHandsFightingStyle,
-    AnyLore,
-    AnyCraft,
-    MutuallyExclusive(Perk, Perk),
-}
-
-impl CareerClass {
-    // the primary skill is the first one
-    const fn skills(&self) -> (Stat, Stat, Stat, Stat) {
-        use Stat::*;
-
-        match self {
-            CareerClass::Artisan => (Craft, Arms, Power, Swing),
-            CareerClass::Beggar => (Legs, Charm, Mind, Read),
-            CareerClass::ConArtist => (Face, Hands, Power, Read),
-            CareerClass::Detective => (Read, Dodge, Lore, Observe),
-            CareerClass::Entertainer => (Dodge, Charm, Face, Hands),
-            CareerClass::Farmer => (Swing, Arms, Control, Hands),
-            CareerClass::Guard => (Observe, Aim, Block, Impose),
-            CareerClass::Hunter => (Aim, Balance, Observe, Swing),
-            CareerClass::Infantry => (Thrust, Block, Dodge, Legs),
-            CareerClass::Knight => (Block, Control, Impose, Thrust),
-            CareerClass::Labourer => (Arms, Balance, Craft, Legs),
-            CareerClass::Mariner => (Power, Arms, Balance, Control),
-            CareerClass::Noble => (Impose, Aim, Block, Language),
-            CareerClass::Official => (Language, Face, Impose, Mind),
-            CareerClass::Physician => (Hands, Craft, Impose, Thrust),
-            CareerClass::Rogue => (Balance, Hands, Power, Thrust),
-            CareerClass::Scholar => (Lore, Language, Legs, Mind),
-            CareerClass::Trader => (Charm, Face, Language, Observe),
-            CareerClass::Wayfarer => (Control, Aim, Dodge, Observe),
-            CareerClass::Zealot => (Mind, Charm, Lore, Read),
-        }
-    }
-
-    fn perks(
-        &self,
-    ) -> (
-        CareerClassPerkOption,
-        CareerClassPerkOption,
-        CareerClassPerkOption,
-    ) {
-        use crate::data::perks::Perk::*;
-
-        macro_rules! single {
-            ((FightingStyle(A / H))) => {
-                CareerClassPerkOption::AnyFightingStyle
-            };
-            ((FightingStyle(H))) => {
-                CareerClassPerkOption::AnyHandsFightingStyle
-            };
-            ((FightingStyle(A))) => {
-                CareerClassPerkOption::AnyArmsFightingStyle
-            };
-            (AnyLore) => {
-                CareerClassPerkOption::AnyLore
-            };
-            (AnyCraft) => {
-                CareerClassPerkOption::AnyCraft
-            };
-            (($id:tt || $id2:tt)) => {
-                CareerClassPerkOption::MutuallyExclusive($id, $id2)
-            };
-            ($id:tt || $id2:tt) => {
-                CareerClassPerkOption::MutuallyExclusive($id, $id2)
-            };
-            ($id:expr) => {
-                CareerClassPerkOption::Perk($id)
-            };
-        }
-
-        macro_rules! sof_option {
-            ($($es:tt),+) => {(
-                $(single![$es]),+
-            )};
-        }
-
-        match self {
-            CareerClass::Artisan => sof_option!(BulkBuyer, AnyCraft, Numeracy),
-            CareerClass::Beggar => sof_option!(HeavySleeper, Instrumentalist, SturdyStuff),
-            CareerClass::ConArtist => sof_option!(ColdRead, Disassembler, Finesse),
-            CareerClass::Detective => sof_option!((ColdRead || Torturer), Locksmith, AnyLore),
-            CareerClass::Entertainer => sof_option!(Dancer, Instrumentalist, Trainer),
-            CareerClass::Farmer => sof_option!(AnyCraft, (Lore("Nature".to_owned())), Trainer),
-            CareerClass::Guard => sof_option!(Grappler, Sentinel, (FightingStyle(A / H))),
-            CareerClass::Hunter => sof_option!(LightFooted, Trainer, (FightingStyle(A))),
-            CareerClass::Infantry => sof_option!(ArmourTraining, (FightingStyle(H)), StoneHearted),
-            CareerClass::Knight => sof_option!(ArmourTraining, (FightingStyle(A / H)), Horseriding),
-            CareerClass::Labourer => {
-                sof_option!(Knockout, (Craft("Carpentry".to_owned())), StrongBack)
-            }
-            CareerClass::Mariner => sof_option!(Marine, Swimmer, (FightingStyle(A))),
-            CareerClass::Noble => sof_option!(Bossy, Horseriding, Numeracy),
-            CareerClass::Official => sof_option!(Dancer, Indulgent, Literacy),
-            CareerClass::Physician => sof_option!(
-                (Craft("Surgery".to_owned())),
-                Literacy,
-                (Lore("Medicine".to_owned()))
-            ),
-            CareerClass::Rogue => sof_option!(Finesse, LightFooted, (FightingStyle(H))),
-            CareerClass::Scholar => sof_option!(Literacy, AnyLore, Numeracy),
-            CareerClass::Trader => sof_option!(BulkBuyer, (Horseriding || Marine), Numeracy),
-            CareerClass::Wayfarer => sof_option!(Horseriding, NightEyes, Pathfinder),
-            CareerClass::Zealot => sof_option!(Literacy, (Lore("Religion".to_owned())), Ritualist),
-        }
     }
 }
 

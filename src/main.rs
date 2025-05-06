@@ -11,6 +11,7 @@ use sof_chargen::event::scenarios;
 use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Character, event};
 use std::borrow::Cow;
+use sof_chargen::event::Event;
 
 fn load_fonts() -> Vec<Cow<'static, [u8]>> {
     vec![
@@ -44,7 +45,7 @@ pub fn main() -> iced::Result {
 
 #[derive(Default)]
 struct App {
-    current_event: Option<Box<dyn Iterator<Item = Choice>>>,
+    current_event: Option<Box<dyn Event>>,
     current_choice: Option<Choice>,
 
     trait_entry: String,

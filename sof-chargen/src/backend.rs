@@ -28,7 +28,7 @@ pub trait Backend {
         self.get_character_mut().omen = Some(omen)
     }
 
-    fn gain_perk(&self, perk: Perk) {
+    fn gain_perk(&self, _perk: Perk) {
         todo!("generic impl")
     }
 

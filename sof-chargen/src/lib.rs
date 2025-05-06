@@ -1,4 +1,5 @@
 #![feature(gen_blocks)]
+#![feature(trait_alias)]
 
 #[macro_use]
 extern crate enum_map;
