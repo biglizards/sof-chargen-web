@@ -113,7 +113,6 @@ pub struct Character {
     pub affiliation: Option<Affiliation>,
     pub careers: Vec<Career>, // you can have up to 4 careers i think
     pub rank: Option<DiceT>,
-    pub ivory_dice: usize,
 }
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug)]
