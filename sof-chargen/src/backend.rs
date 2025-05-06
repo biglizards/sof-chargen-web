@@ -5,6 +5,7 @@ use crate::data::careers::{Affiliation, Career};
 use crate::data::locations::{Culture, Faith, Location};
 use crate::data::perks::Perk;
 use crate::dice::DiceRoll;
+use crate::event::stages::LifeStage;
 use std::cell::{Ref, RefCell, RefMut};
 use std::cmp::{max, min};
 use std::collections::VecDeque;
@@ -48,12 +49,11 @@ impl BaseBackend {
         self.log(format!("You were raised {}.", culture));
         self.character.culture = Some(culture)
     }
-    pub fn set_faith(&mut self, faith: Faith) {
-        let first_faith = self.character.faith.is_none();
-        self.log(match self.character.age {
-            0 if first_faith => format!("Your parents worshipped {}.", faith),
-            0 => format!("Your parents converted to {}.", faith),
-            1..15 => format!(
+    fn set_faith(&mut self, faith: Faith) {
+        self.log(match self.character.life_stage {
+            LifeStage::RollStats => format!("Your parents worshipped {}.", faith),
+            LifeStage::RollParents => format!("Your parents converted to {}.", faith),
+            LifeStage::RollOmens => format!(
                 "For the sake of your apprenticeship, you were raised to follow {}.",
                 faith
             ),

@@ -7,11 +7,11 @@ mod util;
 use iced::font::Family;
 use iced::widget::Row;
 use iced::{Font, Settings, Theme};
-use sof_chargen::event::scenarios;
+use sof_chargen::event::Event;
+use sof_chargen::event::{birth, scenarios};
 use sof_chargen::ipc::Choice;
 use sof_chargen::{Backend, Character, event};
 use std::borrow::Cow;
-use sof_chargen::event::Event;
 
 fn load_fonts() -> Vec<Cow<'static, [u8]>> {
     vec![
@@ -71,6 +71,7 @@ enum Message {
     RollCareers,
     DebugSlider,
     DebugScenario(i8),
+    AdvanceLifeStage,
 }
 
 impl Message {
@@ -85,6 +86,16 @@ impl Message {
 }
 
 impl App {
+    fn next_stage(&self) -> Option<Box<dyn Event>> {
+        let stage = self.backend.character().life_stage;
+        if let Some((stage, event)) = stage.next(self.backend.clone()) {
+            self.backend.character_mut().life_stage = stage;
+            Some(event)
+        } else {
+            None
+        }
+    }
+
     fn update(&mut self, message: Message) {
         let should_advance = message.should_advance();
 
@@ -118,17 +129,14 @@ impl App {
                 self.log.clear();
             }
             Message::RollStats => {
-                self.current_event = Some(Box::new(event::roll_core_stats(self.backend.clone())));
-                event::roll_magic(self.backend.clone());
-                event::roll_luck(self.backend.clone());
-                event::roll_stamina(self.backend.clone());
+                self.current_event = Some(Box::new(birth::roll_core_stats(self.backend.clone())));
             }
             Message::PickStar => {
-                self.current_event = Some(Box::new(event::pick_omens(self.backend.clone())))
+                self.current_event = Some(Box::new(birth::pick_omens(self.backend.clone())))
             }
-            Message::RollLocation => event::roll_location_of_birth(self.backend.clone()),
+            Message::RollLocation => birth::roll_location_of_birth(&self.backend),
             Message::RollCareers => {
-                self.current_event = Some(Box::new(event::affiliation_rank_careers(
+                self.current_event = Some(Box::new(birth::affiliation_rank_careers(
                     self.backend.clone(),
                 )))
             }
@@ -150,6 +158,10 @@ impl App {
                     }
                     _ => println!("invalid debug scenario!"),
                 }
+            }
+            Message::AdvanceLifeStage => {
+                self.current_choice = None;
+                self.current_event = self.next_stage();
             }
         }
 

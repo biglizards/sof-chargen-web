@@ -1,4 +1,3 @@
-use std::cmp::max;
 // we use roll instead of maybe_roll here because birth events happen pre-omen
 use crate::character::BIRTH_OMENS;
 use crate::data::careers::{CareerTableStar, get_affiliation, get_rank};
@@ -8,8 +7,9 @@ use crate::event::util::{d3, d6};
 use crate::event::{Event, util};
 use crate::ipc::Choice;
 use crate::{Backend, BirthOmen, CORE_STATS, Stat, choose_vec, roll, run};
+use std::cmp::max;
 
-pub gen fn pick_stat(backend: Backend) -> Choice {
+gen fn pick_stat(backend: Backend) -> Choice {
     let core_stat = choose_vec!(
         "Pick a core stat to roll next",
         CORE_STATS
@@ -62,10 +62,15 @@ pub fn roll_core_stats(backend: Backend) -> impl Event {
         .chain(pick_stat(backend.clone()))
         .chain(pick_stat(backend.clone()))
         .chain(pick_stat(backend.clone()))
-        .chain(pick_stat(backend))
+        .chain(pick_stat(backend.clone()))
+        .chain(gen {
+            roll_magic(backend.clone());
+            roll_luck(backend.clone());
+            roll_stamina(backend);
+        })
 }
 
-pub fn roll_location_of_birth(backend: Backend) {
+pub fn roll_location_of_birth(backend: &Backend) {
     let loc = crate::data::locations::location_table((d6(), d6(), d6()), d3());
 
     // ok just to speed things up a bit we're doing step 2 here too
