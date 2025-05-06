@@ -154,9 +154,9 @@ impl<const N: i8> DiceRoll for D<N> {
     }
 }
 
-impl<const N: i8> Into<i8> for D<N> {
-    fn into(self) -> i8 {
-        self.0
+impl<const N: i8> From<D<N>> for i8 {
+    fn from(val: D<N>) -> i8 {
+        val.0
     }
 }
 
@@ -219,17 +219,10 @@ impl<const N: i8> AsPool for Many<N> {
     }
 }
 
-fn is_prime(val: i8) -> bool {
-    match val {
-        2 | 3 | 5 | 7 => true,
-        _ => false,
-    }
-}
 fn roll_magic_dice(mut v: Vec<D<10>>) -> Vec<D<10>> {
     let val = d10();
-    let num = val.result();
     v.push(val);
-    if is_prime(num) { roll_magic_dice(v) } else { v }
+    if matches!(val.result(), 2 | 3 | 5 | 7) { roll_magic_dice(v) } else { v }
 }
 
 #[derive(Clone)]
@@ -338,13 +331,21 @@ macro_rules! roll {
     ($i:literal) => {$i};
     ($i:ident) => {$i};
     (($($tail:tt)*)) => {roll!($($tail)*)};
-    (1 d $d:literal) => {crate::dice::D::<$d>::roll()};
-    ($q:tt d 100) => {crate::dice::D100Pool::roll($q)};
-    ($q:tt d $d:literal) => {crate::dice::Many::<$d>::roll($q)};
-    (kh $tail:tt) => {crate::dice::PickHighest(roll!$tail)};
-    (kl $tail:tt) => {crate::dice::PickLowest(roll!$tail)};
-    ($a:tt - $($tail:tt)*) => {crate::dice::Subtract(roll!($a), roll!($($tail)*))};
-    ($a:tt + $($tail:tt)*) => {crate::dice::Add(roll!($a), roll!($($tail)*))};
+    (1 d $d:literal) => {$crate::dice::D::<$d>::roll()};
+    ($q:tt d 100) => {$crate::dice::D100Pool::roll($q)};
+    ($q:tt d $d:literal) => {$crate::dice::Many::<$d>::roll($q)};
+    (kh $tail:tt) => {$crate::dice::PickHighest(roll!$tail)};
+    (kl $tail:tt) => {$crate::dice::PickLowest(roll!$tail)};
+    ($a:tt - $($tail:tt)*) => {$crate::dice::Subtract(roll!($a), roll!($($tail)*))};
+    ($a:tt + $($tail:tt)*) => {$crate::dice::Add(roll!($a), roll!($($tail)*))};
+}
+
+// aliases -- otherwise you'd have to write D::<10>::roll() which is ugly as heck
+pub fn d10() -> D<10> {
+    D::roll()
+}
+pub fn d100() -> D<100> {
+    D::roll()
 }
 
 #[cfg(test)]
@@ -463,12 +464,4 @@ mod test {
         let lowest = PickLowest(Many(vec![d10, d10]));
         assert_eq!(lowest.range(), 1..=10);
     }
-}
-
-// aliases -- otherwise you'd have to write D::<10>::roll() which is ugly as heck
-pub fn d10() -> D<10> {
-    D::roll()
-}
-pub fn d100() -> D<100> {
-    D::roll()
 }

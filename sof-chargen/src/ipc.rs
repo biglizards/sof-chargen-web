@@ -92,9 +92,9 @@ macro_rules! choose {
     ($descr: literal, $($x: expr),*) => {
         {
             let mut orig = vec![$($x),*];
-            let options = orig.iter().map(|x| crate::ipc::Choosable::from(x)).collect();
+            let options = orig.iter().map(|x| $crate::ipc::Choosable::from(x)).collect();
             let chosen = std::rc::Rc::from(std::cell::Cell::new(0));
-            yield crate::ipc::Selection {description: ($descr), options: options, chosen: chosen.clone()}.into();
+            yield $crate::ipc::Selection {description: ($descr), options, chosen: chosen.clone()}.into();
             orig.remove(chosen.get())
         }
     };
@@ -102,11 +102,11 @@ macro_rules! choose {
 #[macro_export]
 macro_rules! choose_vec {
     ($descr: literal, $x: ident) => {{
-        let options = $x.iter().map(|x| crate::ipc::Choosable::from(x)).collect();
+        let options = $x.iter().map(|x| $crate::ipc::Choosable::from(x)).collect();
         let chosen = std::rc::Rc::from(std::cell::Cell::new(0));
-        yield crate::ipc::Selection {
+        yield $crate::ipc::Selection {
             description: ($descr),
-            options: options,
+            options,
             chosen: chosen.clone(),
         }
         .into();
@@ -130,7 +130,7 @@ macro_rules! choose_vec {
 macro_rules! input_trait {
     ($description: literal) => {{
         let chosen = std::rc::Rc::from(std::cell::Cell::new(String::new()));
-        yield crate::ipc::TraitChoice {
+        yield $crate::ipc::TraitChoice {
             description: ($description),
             chosen: chosen.clone(),
         }
@@ -144,7 +144,7 @@ macro_rules! pick_roll {
     ($description: literal, $roll: expr) => {{
         let roll = $roll;
         let chosen = std::rc::Rc::from(std::cell::Cell::new(None));
-        yield crate::ipc::PickRoll {
+        yield $crate::ipc::PickRoll {
             description: $description,
             roll: Box::new(roll),
             chosen: chosen.clone(),
@@ -161,16 +161,16 @@ macro_rules! maybe_roll {
     ($description: literal, $backend: ident, $($tail:tt)*) => {{
         let roll = roll!($($tail)*);
         match $backend.get_omen() {
-            Some(crate::character::BirthOmen::PropheticSigns(charges)) if charges != 0 => {
-                match crate::pick_roll!($description, roll.clone()) {
-                    None => crate::dice::PickedRoll(roll.result(), roll),
+            Some($crate::character::BirthOmen::PropheticSigns(charges)) if charges != 0 => {
+                match $crate::pick_roll!($description, roll.clone()) {
+                    None => $crate::dice::PickedRoll(roll.result(), roll),
                     Some(i) => {
-                        $backend.set_omen(crate::character::BirthOmen::PropheticSigns(charges-1));
-                        crate::dice::PickedRoll(i, roll)
+                        $backend.set_omen($crate::character::BirthOmen::PropheticSigns(charges-1));
+                        $crate::dice::PickedRoll(i, roll)
                     },
                 }
             }
-            _ => crate::dice::PickedRoll(roll.result(), roll),
+            _ => $crate::dice::PickedRoll(roll.result(), roll),
         }
     }};
 }
@@ -179,7 +179,7 @@ macro_rules! maybe_roll {
 macro_rules! ask {
     ($description: expr) => {{
         let answer = std::rc::Rc::new(core::cell::Cell::new(false));
-        let question = crate::ipc::Choice::Question(crate::ipc::Question {
+        let question = $crate::ipc::Choice::Question($crate::ipc::Question {
             description: $description,
             chosen: answer.clone(),
         });

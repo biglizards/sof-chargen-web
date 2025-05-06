@@ -3,7 +3,7 @@ use crate::data::locations::Culture;
 use crate::dice::DiceRoll;
 use crate::ipc::Choice;
 use crate::{Backend, ask, choose, maybe_roll, roll};
-use std::cmp::{max, min};
+use std::cmp::max;
 
 // maybe we want these to render somehow in the future?
 pub(crate) fn d6() -> i8 {
@@ -129,7 +129,7 @@ pub(crate) gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
     // drop char so we can borrow it as mut later (within handle_star)
     drop(char);
 
-    let mut rank = max(0, min(rank, 9)); // clamp between 0 and 9
+    let mut rank = rank.clamp(0, 9);
 
     let career = loop {
         let entry = get_careers(&loc, affiliation, rank);
@@ -144,12 +144,10 @@ pub(crate) gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
                         c2
                     } else if !is_eligible(culture, s2) {
                         c1
+                    } else if backend.get_character().parents_career.is_none() {
+                        choose!("Pick your guardians' career:", c1, c2)
                     } else {
-                        if backend.get_character().parents_career.is_none() {
-                            choose!("Pick your guardians' career:", c1, c2)
-                        } else {
-                            choose!("Pick your career:", c1, c2)
-                        }
+                        choose!("Pick your career:", c1, c2)
                     }
                 };
 

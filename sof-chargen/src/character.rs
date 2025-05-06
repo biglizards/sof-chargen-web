@@ -134,7 +134,7 @@ fn check(to_beat: u64, roll: u64) -> CheckResult {
         96..=100 => CriticalFailure,
         _ if roll * 4 <= to_beat => ExtremeSuccess,
         _ if roll * 2 <= to_beat => HardSuccess,
-        _ if roll * 1 <= to_beat => Success,
+        _ if roll <= to_beat => Success,
         _ => Failure,
     }
 }

@@ -375,10 +375,10 @@ pub fn get_culture(location: &Location, d6s: (i8, i8, i8, i8)) -> Culture {
     }
 
     match d6s.0 {
-        1 | 2 | 3 => location.culture,
+        1..=3 => location.culture,
         4 | 5 => location.secondary_culture,
         6 => match d6s.1 {
-            1 | 2 | 3 => Culture::Varlish,
+            1..=3 => Culture::Varlish,
             4 => Culture::Revic,
             5 => Culture::Kremish,
             6 => further_afield_culture((d6s.2, d6s.3)),
@@ -404,7 +404,7 @@ pub fn get_faith(location: &Location, culture: Culture, d6s: (i8, i8)) -> Faith 
         3 => location.secondary_faith,
         4 | 5 => associated_faith(culture),
         6 => match d6s.1 {
-            1 | 2 | 3 => Faith::Accorder,
+            1..=3 => Faith::Accorder,
             4 | 5 => Faith::Irreligious,
             6 => Faith::TempleOfSeraf,
             _ => unreachable!(),

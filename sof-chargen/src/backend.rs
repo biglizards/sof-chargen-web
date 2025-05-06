@@ -5,7 +5,6 @@ use crate::data::perks::Perk;
 use crate::dice::DiceRoll;
 use crate::event::stages::LifeStage;
 use std::cell::RefCell;
-use std::cmp::{max, min};
 use std::ops::{Deref, DerefMut};
 
 pub trait Backend {
@@ -104,7 +103,7 @@ pub trait Backend {
                 _ => unreachable!(),
             },
         }
-        let rank = max(0, min(rank, 9)); // clamp between 0 and 9
+        let rank = rank.clamp(0, 9);
         self.get_character_mut().rank = Some(rank);
     }
 
