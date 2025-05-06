@@ -1,72 +1,175 @@
-#![warn(clippy::all, rust_2018_idioms)]
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+mod backend;
+mod char_sheet;
+mod save;
+mod sidebar;
+mod util;
 
-// When compiling natively:
-#[cfg(not(target_arch = "wasm32"))]
-fn main() -> eframe::Result {
-    env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+use iced::font::Family;
+use iced::widget::Row;
+use iced::{Font, Settings, Theme};
+use sof_chargen::event::scenarios;
+use sof_chargen::ipc::Choice;
+use sof_chargen::{Backend, Character, event};
+use std::borrow::Cow;
 
-    let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 300.0])
-            .with_min_inner_size([300.0, 220.0])
-            .with_icon(
-                // NOTE: Adding an icon is optional
-                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
-                    .expect("Failed to load icon"),
-            ),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "SoF Chargen",
-        native_options,
-        Box::new(|cc| Ok(Box::new(sof_chargen_web::SoFCharGenApp::new(cc)))),
-    )
+fn load_fonts() -> Vec<Cow<'static, [u8]>> {
+    vec![
+        include_bytes!("../Roboto_Mono/static/RobotoMono-Regular.ttf")
+            .as_slice()
+            .into(),
+        include_bytes!("../Roboto_Mono/static/RobotoMono-Bold.ttf")
+            .as_slice()
+            .into(),
+    ]
 }
 
-// When compiling to web using trunk:
-#[cfg(target_arch = "wasm32")]
-fn main() {
-    use eframe::wasm_bindgen::JsCast as _;
+pub fn main() -> iced::Result {
+    println!("starting...");
+    let settings = Settings {
+        fonts: load_fonts(),
+        default_font: Font {
+            family: Family::Name("Roboto Mono"),
+            ..Default::default()
+        },
+        default_text_size: 20.0.into(),
+        ..Default::default()
+    };
 
-    // Redirect `log` message to `console.log` and friends:
-    eframe::WebLogger::init(log::LevelFilter::Debug).ok();
+    iced::application("App Title", App::update, App::view)
+        .theme(App::theme)
+        .settings(settings)
+        .window_size((1500.0, 600.0))
+        .run()
+}
 
-    let web_options = eframe::WebOptions::default();
+#[derive(Default)]
+struct App {
+    current_event: Option<Box<dyn Iterator<Item = Choice>>>,
+    current_choice: Option<Choice>,
 
-    wasm_bindgen_futures::spawn_local(async {
-        let document = web_sys::window()
-            .expect("No window")
-            .document()
-            .expect("No document");
+    trait_entry: String,
+    dice_slider: i16,
+}
 
-        let canvas = document
-            .get_element_by_id("the_canvas_id")
-            .expect("Failed to find the_canvas_id")
-            .dyn_into::<web_sys::HtmlCanvasElement>()
-            .expect("the_canvas_id was not a HtmlCanvasElement");
+#[derive(Debug, Clone)]
+enum Message {
+    NameChanged(String),
+    Choose(usize),
+    SubmitTrait(String),
+    PickRoll(Option<i8>),
+    SliderChanged(i16),
+    QuestionAnswer(bool),
+    ResetAll,
+    // events
+    RollStats,
+    PickStar,
+    RollLocation,
+    RollCareers,
+    DebugSlider,
+    DebugScenario(i8),
+}
 
-        let start_result = eframe::WebRunner::new()
-            .start(
-                canvas,
-                web_options,
-                Box::new(|cc| Ok(Box::new(sof_chargen_web::SoFCharGenApp::new(cc)))),
-            )
-            .await;
+impl Message {
+    pub(crate) fn should_advance(&self) -> bool {
+        matches!(
+            self,
+            // these are the gui events corresponding to IPCs
+            // ie thees ones should cause the event iter to advance now that we're done responding
+            Self::Choose(_) | Self::SubmitTrait(_) | Self::PickRoll(_) | Self::QuestionAnswer(_)
+        )
+    }
+}
 
-        // Remove the loading text and spinner:
-        if let Some(loading_text) = document.get_element_by_id("loading_text") {
-            match start_result {
-                Ok(_) => {
-                    loading_text.remove();
+impl App {
+    fn update(&mut self, message: Message) {
+        let should_advance = message.should_advance();
+        let backend = &*save::BACKEND;
+
+        match message {
+            Message::NameChanged(name) => backend.get_character_mut().name = name,
+            Message::Choose(i) => match &self.current_choice {
+                Some(Choice::Selection(s)) => s.chosen.set(i),
+                _ => panic!("attempted to choose when there is no choice!"),
+            },
+            Message::SubmitTrait(submission) => {
+                if self.current_event.is_some() {
+                    println!("TODO: trait submitted, do something {submission}");
+                    // self.log_choice(&submission);
                 }
-                Err(e) => {
-                    loading_text.set_inner_html(
-                        "<p> The app has crashed. See the developer console for details. </p>",
-                    );
-                    panic!("Failed to start eframe: {e:?}");
+
+                match &self.current_choice {
+                    Some(Choice::String(t)) => t.chosen.set(submission),
+                    _ => panic!("attempted to choose when there is no choice!"),
+                }
+            }
+            Message::PickRoll(choice) => match &self.current_choice {
+                Some(Choice::PickRoll(p)) => p.chosen.set(choice),
+                _ => panic!("attempted to pick roll when there is no choice!"),
+            },
+            Message::QuestionAnswer(a) => match &self.current_choice {
+                Some(Choice::Question(q)) => q.chosen.set(a),
+                _ => panic!("attempted to answer a question when none were posed!"),
+            },
+            Message::ResetAll => {
+                *backend.get_character_mut() = Character::default();
+                backend.log.borrow_mut().clear();
+            },
+            Message::RollStats => {
+                self.current_event = Some(Box::new(event::roll_core_stats(backend)));
+                event::roll_magic(backend);
+                event::roll_luck(backend);
+                event::roll_stamina(backend);
+            }
+            Message::PickStar => self.current_event = Some(Box::new(event::pick_omens(backend))),
+            Message::RollLocation => event::roll_location_of_birth(backend),
+            Message::RollCareers => {
+                self.current_event = Some(Box::new(event::affiliation_rank_careers(backend)))
+            }
+            Message::SliderChanged(v) => self.dice_slider = v,
+            Message::DebugSlider => {
+                self.current_event = Some(Box::new(event::test_pick_dice(backend)))
+            }
+            Message::DebugScenario(i) => {
+                self.current_choice = None;
+                match i {
+                    1 => self.current_event = Some(Box::from(scenarios::kremish_accorder(backend))),
+                    2 => {
+                        self.current_event =
+                            Some(Box::from(scenarios::non_kremish_accorder(backend)))
+                    }
+                    _ => println!("invalid debug scenario!"),
                 }
             }
         }
-    });
+
+        if should_advance || (self.current_choice.is_none() && self.current_event.is_some()) {
+            self.advance_event();
+        }
+
+        if self.current_event.is_none() {
+            save::save_backend();
+        }
+    }
+
+    fn advance_event(&mut self) {
+        self.current_choice = None;
+        self.current_choice = self.current_event.as_mut().unwrap().next();
+        if self.current_choice.is_none() {
+            self.current_event = None;
+        }
+    }
+
+    fn view(&self) -> Row<Message> {
+        iced::widget::row! {
+            char_sheet::char_sheet(&save::BACKEND),
+            self.sidebar(&save::BACKEND),
+        }
+    }
+
+    fn theme(&self) -> Theme {
+        let Some(theme) = Theme::ALL.get(1usize) else {
+            return Theme::Dark;
+        };
+        theme.clone()
+    }
 }
