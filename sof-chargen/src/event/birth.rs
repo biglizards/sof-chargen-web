@@ -9,7 +9,7 @@ use crate::event::{Event, util};
 use crate::ipc::Choice;
 use crate::{Backend, BirthOmen, CORE_STATS, Stat, choose_vec, roll, run};
 
-pub gen fn pick_stat(backend: &impl Backend) -> Choice {
+pub gen fn pick_stat(backend: Backend) -> Choice {
     let core_stat = choose_vec!(
         "Pick a core stat to roll next",
         CORE_STATS
@@ -40,7 +40,7 @@ pub gen fn pick_stat(backend: &impl Backend) -> Choice {
     }
 }
 
-pub fn roll_magic(backend: &impl Backend) {
+pub fn roll_magic(backend: Backend) {
     let roll = MagicDice::roll();
     if roll.result() >= 100 {
         println!("You died during character creation!");
@@ -49,23 +49,23 @@ pub fn roll_magic(backend: &impl Backend) {
     backend.set_stat(Stat::Magic, &roll);
 }
 
-pub fn roll_luck(backend: &impl Backend) {
+pub fn roll_luck(backend: Backend) {
     backend.set_stat(Stat::Luck, &d100());
 }
 
-pub fn roll_stamina(backend: &impl Backend) {
+pub fn roll_stamina(backend: Backend) {
     backend.set_stat(Stat::Stamina, &roll!(2 d 6));
 }
 
-pub fn roll_core_stats(backend: &impl Backend) -> impl Event {
-    pick_stat(backend)
-        .chain(pick_stat(backend))
-        .chain(pick_stat(backend))
-        .chain(pick_stat(backend))
+pub fn roll_core_stats(backend: Backend) -> impl Event {
+    pick_stat(backend.clone())
+        .chain(pick_stat(backend.clone()))
+        .chain(pick_stat(backend.clone()))
+        .chain(pick_stat(backend.clone()))
         .chain(pick_stat(backend))
 }
 
-pub fn roll_location_of_birth(backend: &impl Backend) {
+pub fn roll_location_of_birth(backend: Backend) {
     let loc = crate::data::locations::location_table((d6(), d6(), d6()), d3());
 
     // ok just to speed things up a bit we're doing step 2 here too
@@ -111,12 +111,12 @@ pub fn roll_location_of_birth(backend: &impl Backend) {
     backend.set_birth_location(loc);
 }
 
-pub gen fn affiliation_rank_careers(backend: &impl Backend) -> Choice {
+pub gen fn affiliation_rank_careers(backend: Backend) -> Choice {
     let loc;
     let culture;
     {
         // we're mutating char later on, so don't borrow it for very long
-        let char = backend.get_character();
+        let char = backend.character();
         loc = char.birth_location.as_ref().unwrap().clone();
         culture = char.culture.unwrap();
     }
@@ -156,8 +156,8 @@ pub gen fn affiliation_rank_careers(backend: &impl Backend) -> Choice {
 // Note: we move onto a new doc, which starts numbering from 1
 // https://docs.google.com/document/d/13-d2KpDkzUQod8Uby-l3rSK8wRsfeMtZbFOxDvsswhY
 // Step 1: Location of Birth
-pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
-    let rank = backend.get_character().rank.unwrap_or_default();
+pub gen fn pick_omens(backend: Backend) -> Choice {
+    let rank = backend.character().rank.unwrap_or_default();
 
     let omen = choose_vec!(consume "Pick your birth omen", BIRTH_OMENS);
     backend.set_omen(omen);
@@ -172,7 +172,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
                     backend.get_stat(Stat::Stamina).unwrap_or_default(),
                 ),
             );
-            let parent_career = backend.get_character().parents_career.unwrap();
+            let parent_career = backend.character().parents_career.unwrap();
             backend.set_career(parent_career);
             return; // don't prompt the user to pick a career, they explicitly get their parents
         }
@@ -181,7 +181,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
             // though whether great or terrible they could not say.
             // When rolling a die during character creation, you may choose the result up to twice.
             // Inherit your guardians’ rank, then reroll your affiliation.
-            run!(util::roll_affiliation(backend, 0));
+            run!(util::roll_affiliation(backend.clone(), 0));
         }
         BirthOmen::PracticallyMinded => {
             // Whatever omens were present at your birth, your guardians were practical folk who
@@ -223,7 +223,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
             // Reroll Luck, but start one rank below your guardians and reroll your affiliation.
             backend.set_stat(Stat::Luck, &roll!(1 d 100));
             backend.set_rank(max(rank - 1, 0));
-            run!(util::roll_affiliation(backend, 0));
+            run!(util::roll_affiliation(backend.clone(), 0));
         }
         BirthOmen::PortentsOfDoom => {
             // Without explanation, your guardians shunned you from birth,
@@ -238,11 +238,11 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
                 ),
             );
             backend.set_rank(max(rank - d3(), 0));
-            run!(util::roll_affiliation(backend, 1));
+            run!(util::roll_affiliation(backend.clone(), 1));
         }
     };
 
     // then we gain a career
-    let rank = backend.get_character().rank.unwrap_or_default();
+    let rank = backend.character().rank.unwrap_or_default();
     run!(util::change_rank(backend, rank));
 }

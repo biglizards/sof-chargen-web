@@ -1,6 +1,4 @@
-use crate::data::careers::{
-    Career, CareerTableEntry, CareerTableStar, get_affiliation, get_careers,
-};
+use crate::data::careers::{CareerTableEntry, CareerTableStar, get_affiliation, get_careers};
 use crate::data::locations::Culture;
 use crate::dice::DiceRoll;
 use crate::ipc::Choice;

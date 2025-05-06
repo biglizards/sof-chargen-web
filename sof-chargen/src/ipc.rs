@@ -161,16 +161,16 @@ macro_rules! maybe_roll {
     ($description: literal, $backend: ident, $($tail:tt)*) => {{
         let roll = roll!($($tail)*);
         match $backend.get_omen() {
-            Some(BirthOmen::PropheticSigns(charges)) if charges != 0 => {
-                match pick_roll!($description, roll) {
-                    None => crate::dice::PickedRoll(roll, roll.result()),
+            Some($crate::character::BirthOmen::PropheticSigns(charges)) if charges != 0 => {
+                match $crate::pick_roll!($description, roll) {
+                    None => $crate::dice::PickedRoll(roll, roll.result()),
                     Some(i) => {
-                        $backend.set_omen(BirthOmen::PropheticSigns(charges-1));
-                        crate::dice::PickedRoll(roll, i)
+                        $backend.set_omen($crate::character::BirthOmen::PropheticSigns(charges-1));
+                        $crate::dice::PickedRoll(roll, i)
                     },
                 }
             }
-            _ => crate::dice::PickedRoll(roll, roll.result()),
+            _ => $crate::dice::PickedRoll(roll, roll.result()),
         }
     }};
 }
