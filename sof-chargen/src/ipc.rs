@@ -178,8 +178,8 @@ macro_rules! maybe_roll {
 #[macro_export]
 macro_rules! ask {
     ($description: expr) => {{
-        let answer = Rc::new(Cell::new(false));
-        let question = Choice::Question(Question {
+        let answer = std::rc::Rc::new(core::cell::Cell::new(false));
+        let question = crate::ipc::Choice::Question(crate::ipc::Question {
             description: $description,
             chosen: answer.clone(),
         });
