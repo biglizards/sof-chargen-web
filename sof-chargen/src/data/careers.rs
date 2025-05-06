@@ -438,8 +438,8 @@ pub fn get_careers(location: &Location, affiliation: Affiliation, rank: i8) -> C
         CareerTable::Nivena => match affiliation {
             Slumfolk => match rank {
                 0 => career!(Outcast(B)),
-                1 => career!(Militia(G), OddJobber(L)),
-                2 => career!(Militia(G), OddJobber(L)),
+                1 => career!(Militia(G), Odd Jobber(L)),
+                2 => career!(Militia(G), Odd Jobber(L)),
                 3 => career!(Peddler(C), *Dewisetic(Z)
                     CareerTableStar::NeedsFaithAndCulture(Faith::Gytungrug, Culture::Kremish)),
                 4..=9 => career!(Join Plebeians),
