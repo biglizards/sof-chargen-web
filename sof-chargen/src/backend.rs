@@ -41,19 +41,51 @@ pub trait Backend {
         self.get_character_mut().culture = Some(culture)
     }
     fn set_faith(&self, faith: Faith) {
-        self.log(format!("You were taught to worship {}.", faith));
+        let first_faith = self.get_character().faith.is_none();
+        self.log(match self.get_character().age {
+            0 if first_faith => format!("Your parents worshipped {}.", faith),
+            0 => format!("Your parents converted to {}.", faith),
+            1..15 => format!("For the sake of your apprenticeship, you were raised to follow {}.", faith),
+            _ => format!("You converted to {}.", faith)
+        });
         self.get_character_mut().faith = Some(faith)
     }
 
     fn set_affiliation(&self, affiliation: Affiliation) {
-        self.log(format!("You joined the {}", affiliation));
+        match self.get_character().affiliation {
+            None => self.log(format!("Your parents were members of the {}.", affiliation)),
+            Some(old) if old != affiliation => self.log(format!("You joined the {}.", affiliation)),
+            _ => {}
+        }
+
         self.get_character_mut().affiliation = Some(affiliation)
     }
     fn set_career(&self, career: Career) {
-        self.log(format!(
-            "You spent a time working as a {}, granting you the skills of a {}.",
-            career.name, career.class
-        ));
+        if self.get_character().parents_career.is_none() {
+            self.log(format!("Your parents were {}s.", career.name));
+            self.get_character_mut().parents_career = Some(career);
+            return;
+        }
+        
+        let (already_present, num_careers) = {
+            let careers = &self.get_character().careers;
+            (careers.contains(&career), careers.len())
+        };
+        self.log(match num_careers {
+            0 => format!(
+                "You were apprenticed as a {}, granting you the skills of a {}.",
+                career.name, career.class
+            ),
+            _ if already_present => format!(
+                "You continued working as a {}, granting you the skills of a master {}.",
+                career.name, career.class
+            ),
+            _ => format!(
+                "You spent a time working as a {}, granting you the skills of a {}.",
+                career.name, career.class
+            ),
+        });
+        // todo in character creation 3.0, gain a perk with that career name instead
         self.get_character_mut().careers.push(career);
     }
     fn set_rank(&self, rank: i8) {
@@ -66,8 +98,8 @@ pub trait Backend {
                 -1 => self.log("You fell a rank.".to_string()),
                 x if x > 0 => self.log(format!("You gained {} ranks.", x)),
                 x if x < 0 => self.log(format!("You fell {} ranks.", -x)),
-                _ => unreachable!()
-            }
+                _ => unreachable!(),
+            },
         }
         let rank = max(0, min(rank, 9)); // clamp between 0 and 9
         self.get_character_mut().rank = Some(rank);
