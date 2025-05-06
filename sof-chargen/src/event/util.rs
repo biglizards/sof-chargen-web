@@ -4,7 +4,7 @@ use crate::data::careers::{
 use crate::data::locations::Culture;
 use crate::dice::DiceRoll;
 use crate::ipc::Choice;
-use crate::{Backend, ask, choose, roll};
+use crate::{Backend, ask, choose, maybe_roll, roll};
 use std::cmp::{max, min};
 
 // maybe we want these to render somehow in the future?
@@ -38,10 +38,15 @@ pub(crate) gen fn roll_affiliation(backend: &impl Backend, mut disadvantage: usi
         // Roll 1d100 on your birthplace’s affiliation table [...]
         // if your guardians were not members of that location’s dominant culture roll with disadvantage
         // note from lys: if you already have disadvantage from somewhere (eg table says to) it's double
-        affiliation = if loc.culture == culture {
-            get_affiliation(&loc, roll!(kh((1+disadvantage) d 100)).result())
-        } else {
-            get_affiliation(&loc, roll!(kh((2+disadvantage) d 100)).result())
+        affiliation = {
+            let roll = if loc.culture == culture {
+                // todo maybe instead of allowing them to pick a roll, it instead prompts picking
+                //   an entry from the table? Would need custom logic.
+                maybe_roll!("Roll a new affiliation", backend, kh((1+disadvantage) d 100)).result()
+            } else {
+                maybe_roll!("Roll a new affiliation", backend, kh((2+disadvantage) d 100)).result()
+            };
+            get_affiliation(&loc, roll)
         };
         backend.set_affiliation(affiliation);
 
@@ -101,9 +106,8 @@ macro_rules! handle_star {
                         }
                     }
                 } else {
-                    // todo make this a popup or something
-                    //   or better, don't even offer the option
-                    println!("You can't pick that one!")
+                    // we should have filtered out for this case already
+                    println!("WARNING: Attempted to pick illegal career (wrong culture)!")
                 }
             }
         }
@@ -136,16 +140,21 @@ pub(crate) gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
                 handle_star!(star, career, backend, culture, faith)
             }
             CareerTableEntry::Careers((c1, s1), (c2, s2)) => {
-                let careers: Vec<Career> = [(c1, s1), (c2, s2)]
-                    .iter()
-                    .filter(|(_, s)| is_eligible(culture, *s))
-                    .map(|&(c, _)| c)
-                    .collect();
-                let career = if careers.len() == 1 {
-                    *careers.first().unwrap()
-                } else {
-                    choose!("Pick your guardians' career:", c1, c2)
+                let career = {
+                    // Assert: there are no entries for you can be ineligible for all careers
+                    if !is_eligible(culture, s1) {
+                        c2
+                    } else if !is_eligible(culture, s2) {
+                        c1
+                    } else {
+                        if backend.get_character().parents_career.is_none() {
+                            choose!("Pick your guardians' career:", c1, c2)
+                        } else {
+                            choose!("Pick your career:", c1, c2)
+                        }
+                    }
                 };
+
                 let star = if career == c1 { s1 } else { s2 };
                 handle_star!(star, career, backend, culture, faith)
             }

@@ -146,7 +146,7 @@ macro_rules! pick_roll {
         let chosen = std::rc::Rc::from(std::cell::Cell::new(None));
         yield crate::ipc::PickRoll {
             description: $description,
-            roll: Box::new(roll.clone()),
+            roll: Box::new(roll),
             chosen: chosen.clone(),
         }
         .into();
@@ -161,16 +161,16 @@ macro_rules! maybe_roll {
     ($description: literal, $backend: ident, $($tail:tt)*) => {{
         let roll = roll!($($tail)*);
         match $backend.get_omen() {
-            Some(BirthOmen::PropheticSigns(charges)) if charges != 0 => {
-                match pick_roll!($description, roll) {
-                    None => crate::dice::PickedRoll(roll, roll.result()),
+            Some(crate::character::BirthOmen::PropheticSigns(charges)) if charges != 0 => {
+                match crate::pick_roll!($description, roll.clone()) {
+                    None => crate::dice::PickedRoll(roll.result(), roll),
                     Some(i) => {
-                        $backend.set_omen(BirthOmen::PropheticSigns(charges-1));
-                        crate::dice::PickedRoll(roll, i)
+                        $backend.set_omen(crate::character::BirthOmen::PropheticSigns(charges-1));
+                        crate::dice::PickedRoll(i, roll)
                     },
                 }
             }
-            _ => crate::dice::PickedRoll(roll, roll.result()),
+            _ => crate::dice::PickedRoll(roll.result(), roll),
         }
     }};
 }

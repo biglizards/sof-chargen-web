@@ -6,7 +6,7 @@ use crate::data::careers::{get_affiliation, get_rank, CareerTableStar};
 use crate::data::locations::{associated_faith, further_afield_culture, Culture, Faith};
 use crate::dice::{d100, DiceRoll, MagicDice};
 use crate::ipc::Choice;
-use crate::{choose_vec, maybe_roll, pick_roll, roll, run, CORE_STATS};
+use crate::{choose_vec, maybe_roll, roll, run, CORE_STATS};
 use std::cmp::max;
 use util::{d6, d3};
 
@@ -87,6 +87,9 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
                     backend.get_stat(Stat::Stamina).unwrap_or_default(),
                 ),
             );
+            let parent_career = backend.get_character().parents_career.unwrap();
+            backend.set_career(parent_career);
+            return; // don't prompt the user to pick a career, they explicitly get their parents
         }
         BirthOmen::PropheticSigns(_) => {
             // Someone trusted by your guardians foresaw a striking destiny for you,

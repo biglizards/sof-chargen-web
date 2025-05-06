@@ -68,6 +68,7 @@ impl<T1: DiceRoll, T2: DiceRoll> DiceRoll for Add<T1, T2> {
     }
 }
 
+#[derive(Clone)]
 pub struct Subtract<T1: DiceRoll, T2: DiceRoll>(pub T1, pub T2);
 
 impl<T1: DiceRoll, T2: DiceRoll> DiceRoll for Subtract<T1, T2> {
@@ -94,6 +95,7 @@ impl<T1: DiceRoll, T2: DiceRoll> DiceRoll for Subtract<T1, T2> {
 /// PickHighest<D100Pool<2>> should look like (10, *00*) + 0 = 100
 /// but the only sane implementation I can think of would write it as  (10, *100*) = 100
 /// this is fine for now, i guess.
+#[derive(Clone)]
 pub struct D100Pool {
     d100s: Vec<i8>,
     d10: i8,
@@ -159,6 +161,7 @@ impl<const N: i8> Into<i8> for D<N> {
 }
 
 // As in, 3d6 -> Many::<6>::roll(3)
+#[derive(Clone)]
 pub(crate) struct Many<const N: i8>(pub Vec<D<N>>);
 
 impl<const N: i8> Many<N> {
@@ -229,6 +232,7 @@ fn roll_magic_dice(mut v: Vec<D<10>>) -> Vec<D<10>> {
     if is_prime(num) { roll_magic_dice(v) } else { v }
 }
 
+#[derive(Clone)]
 pub struct MagicDice(Vec<D<10>>);
 impl MagicDice {
     pub(crate) fn roll() -> Self {
@@ -254,19 +258,20 @@ impl DiceRoll for MagicDice {
     }
 }
 
-pub struct PickedRoll<T: DiceRoll>(pub T, pub i8);
+#[derive(Clone)]
+pub struct PickedRoll<T: DiceRoll>(pub i8, pub T);
 
 impl<T: DiceRoll> DiceRoll for PickedRoll<T> {
     fn result(&self) -> i8 {
-        self.1
+        self.0
     }
 
     fn render(&self) -> String {
-        self.0.render()
+        self.1.render()
     }
 
     fn range(&self) -> RangeInclusive<i8> {
-        self.0.range()
+        self.1.range()
     }
 }
 
@@ -294,6 +299,7 @@ macro_rules! render_vantage {
     }};
 }
 
+#[derive(Clone)]
 pub struct PickHighest<T: AsPool>(pub T);
 impl<T: AsPool> DiceRoll for PickHighest<T> {
     fn result(&self) -> i8 {
@@ -309,6 +315,8 @@ impl<T: AsPool> DiceRoll for PickHighest<T> {
         self.0.underlying().range()
     }
 }
+
+#[derive(Clone)]
 pub struct PickLowest<T: AsPool>(pub T);
 impl<T: AsPool> DiceRoll for PickLowest<T> {
     fn result(&self) -> i8 {
