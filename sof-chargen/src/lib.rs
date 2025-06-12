@@ -1,4 +1,5 @@
 #![feature(gen_blocks)]
+#![allow(dead_code)]
 
 #[macro_use]
 extern crate enum_map;
@@ -11,6 +12,7 @@ mod character;
 pub mod dice;
 pub mod event;
 pub mod ipc;
+pub mod logger;
 
 pub mod data;
 

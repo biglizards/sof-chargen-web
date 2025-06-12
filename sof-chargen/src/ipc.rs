@@ -1,6 +1,6 @@
 use crate::dice::DiceRoll;
 use std::cell::Cell;
-use std::fmt::{Debug, Display};
+use std::fmt::Display;
 use std::rc::Rc;
 // An API for implementing the axiom of choice by presenting a vector of options to a user
 // - can select a thing from a vector of things
@@ -190,8 +190,8 @@ macro_rules! ask {
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::Formatter;
     use super::*;
+    use std::fmt::Formatter;
 
     fn run_test(mut iter: impl Iterator<Item = Choice>) {
         loop {

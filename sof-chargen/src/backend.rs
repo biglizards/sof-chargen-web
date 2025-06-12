@@ -1,74 +1,85 @@
+use serde::{Deserialize, Serialize};
+
 use crate::character::{BirthOmen, Character, Stat};
 use crate::data::careers::{Affiliation, Career};
 use crate::data::locations::{Culture, Faith, Location};
 use crate::data::perks::Perk;
 use crate::dice::DiceRoll;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::cmp::{max, min};
+use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
-pub trait Backend {
-    fn get_character_mut(&self) -> impl DerefMut<Target = Character>;
-    fn get_character(&self) -> impl Deref<Target = Character>;
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
+pub struct BaseBackend {
+    pub character: Character,
+    pub log_fifo: VecDeque<String>,
+}
 
-    fn set_stat(&self, stat: Stat, roll: &impl DiceRoll) {
+impl BaseBackend {
+    pub fn set_stat(&mut self, stat: Stat, roll: &impl DiceRoll) {
         // during character generation, stats may not go below 1
-        self.get_character_mut().stats[stat] = Some(roll.result().max(1));
+        self.character.stats[stat] = Some(roll.result().max(1));
     }
-    fn get_stat(&self, stat: Stat) -> Option<i8> {
-        self.get_character().stats[stat]
+    pub fn get_stat(&self, stat: Stat) -> Option<i8> {
+        self.character.stats[stat]
     }
-    fn gain_trait(&self, description: String) {
-        self.get_character_mut().traits.push(description)
+    pub fn gain_trait(&mut self, description: String) {
+        self.character.traits.push(description)
     }
-    fn get_omen(&self) -> Option<BirthOmen> {
-        self.get_character().omen
+    pub fn get_omen(&self) -> Option<BirthOmen> {
+        self.character.omen
     }
-    fn set_omen(&self, omen: BirthOmen) {
-        self.get_character_mut().omen = Some(omen)
+    pub fn set_omen(&mut self, omen: BirthOmen) {
+        self.character.omen = Some(omen)
     }
 
-    fn gain_perk(&self, perk: Perk) {
+    pub fn gain_perk(&self, _perk: Perk) {
         todo!("generic impl")
     }
 
-    fn set_birth_location(&self, location: Location) {
+    pub fn set_birth_location(&mut self, location: Location) {
         self.log(format!("You were born in {}.", location.name));
-        self.get_character_mut().birth_location = Some(location)
+        self.character.birth_location = Some(location)
     }
-    fn set_culture(&self, culture: Culture) {
+    pub fn set_culture(&mut self, culture: Culture) {
         self.log(format!("You were raised {}.", culture));
-        self.get_character_mut().culture = Some(culture)
+        self.character.culture = Some(culture)
     }
-    fn set_faith(&self, faith: Faith) {
-        let first_faith = self.get_character().faith.is_none();
-        self.log(match self.get_character().age {
+    pub fn set_faith(&mut self, faith: Faith) {
+        let first_faith = self.character.faith.is_none();
+        self.log(match self.character.age {
             0 if first_faith => format!("Your parents worshipped {}.", faith),
             0 => format!("Your parents converted to {}.", faith),
-            1..15 => format!("For the sake of your apprenticeship, you were raised to follow {}.", faith),
-            _ => format!("You converted to {}.", faith)
+            1..15 => format!(
+                "For the sake of your apprenticeship, you were raised to follow {}.",
+                faith
+            ),
+            _ => format!("You converted to {}.", faith),
         });
-        self.get_character_mut().faith = Some(faith)
+        self.character.faith = Some(faith)
     }
 
-    fn set_affiliation(&self, affiliation: Affiliation) {
-        match self.get_character().affiliation {
+    pub fn set_affiliation(&mut self, affiliation: Affiliation) {
+        match self.character.affiliation {
             None => self.log(format!("Your parents were members of the {}.", affiliation)),
             Some(old) if old != affiliation => self.log(format!("You joined the {}.", affiliation)),
             _ => {}
         }
 
-        self.get_character_mut().affiliation = Some(affiliation)
+        self.character.affiliation = Some(affiliation)
     }
-    fn set_career(&self, career: Career) {
-        if self.get_character().parents_career.is_none() {
+    pub fn set_career(&mut self, career: Career) {
+        if self.character.parents_career.is_none() {
             self.log(format!("Your parents were {}s.", career.name));
-            self.get_character_mut().parents_career = Some(career);
+            self.character.parents_career = Some(career);
             return;
         }
-        
+
         let (already_present, num_careers) = {
-            let careers = &self.get_character().careers;
+            let careers = &self.character.careers;
             (careers.contains(&career), careers.len())
         };
         self.log(match num_careers {
@@ -86,10 +97,10 @@ pub trait Backend {
             ),
         });
         // todo in character creation 3.0, gain a perk with that career name instead
-        self.get_character_mut().careers.push(career);
+        self.character.careers.push(career);
     }
-    fn set_rank(&self, rank: i8) {
-        let old_rank = self.get_character().rank;
+    pub fn set_rank(&mut self, rank: i8) {
+        let old_rank = self.character.rank;
         match old_rank {
             None => self.log(format!("Your parents lived life at rank {}.", rank)),
             Some(i) => match rank - i {
@@ -102,27 +113,77 @@ pub trait Backend {
             },
         }
         let rank = max(0, min(rank, 9)); // clamp between 0 and 9
-        self.get_character_mut().rank = Some(rank);
+        self.character.rank = Some(rank);
     }
 
-    fn log(&self, text: String) {
+    pub fn log(&mut self, text: String) {
         println!("{}", text);
+        self.log_fifo.push_back(text);
     }
 }
 
-// the backend contract effectively requires interior mutability
-// in theory this could be an UnsafeCell since we never return references to character
-#[derive(Debug, Default)]
-pub struct BaseBackend {
-    pub character: RefCell<Character>,
+// TODO consider making this a pinned pointer instead, which would make this type copy
+// pros: don't have to call .clone() all over the place
+// cons: i will 100% mess up the drop order by using unsafe code
+//   (make sure that this field is always last so it gets dropped last)
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[serde(bound(deserialize = "'de: 'static"))]
+pub struct Backend {
+    base: Rc<RefCell<BaseBackend>>,
 }
 
-impl Backend for BaseBackend {
-    fn get_character_mut(&self) -> impl DerefMut<Target = Character> {
-        self.character.borrow_mut()
+impl Backend {
+    pub fn character(&self) -> impl Deref<Target = Character> {
+        Ref::map(self.base.borrow(), |b| &b.character)
+    }
+    pub fn character_mut(&self) -> impl DerefMut<Target = Character> {
+        RefMut::map(self.base.borrow_mut(), |b| &mut b.character)
     }
 
-    fn get_character(&self) -> impl Deref<Target = Character> {
-        self.character.borrow()
+    pub fn set_stat(&self, stat: Stat, roll: &impl DiceRoll) {
+        self.base.borrow_mut().set_stat(stat, roll);
+    }
+    pub fn get_stat(&self, stat: Stat) -> Option<i8> {
+        self.base.borrow().get_stat(stat)
+    }
+    pub fn gain_trait(&self, description: String) {
+        self.base.borrow_mut().gain_trait(description);
+    }
+    pub fn get_omen(&self) -> Option<BirthOmen> {
+        self.base.borrow().get_omen()
+    }
+    pub fn set_omen(&self, omen: BirthOmen) {
+        self.base.borrow_mut().set_omen(omen);
+    }
+
+    pub fn gain_perk(&self, _perk: Perk) {
+        todo!("generic impl")
+    }
+
+    pub fn set_birth_location(&self, location: Location) {
+        self.base.borrow_mut().set_birth_location(location);
+    }
+    pub fn set_culture(&self, culture: Culture) {
+        self.base.borrow_mut().set_culture(culture);
+    }
+    pub fn set_faith(&self, faith: Faith) {
+        self.base.borrow_mut().set_faith(faith);
+    }
+
+    pub fn set_affiliation(&self, affiliation: Affiliation) {
+        self.base.borrow_mut().set_affiliation(affiliation);
+    }
+    pub fn set_career(&self, career: Career) {
+        self.base.borrow_mut().set_career(career);
+    }
+    pub fn set_rank(&self, rank: i8) {
+        self.base.borrow_mut().set_rank(rank);
+    }
+
+    pub fn log(&self, text: String) {
+        self.base.borrow_mut().log(text);
+    }
+    pub fn get_log(&self) -> impl DerefMut<Target = VecDeque<String>> {
+        RefMut::map(self.base.borrow_mut(), |b| &mut b.log_fifo)
     }
 }

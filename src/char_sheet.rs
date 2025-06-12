@@ -1,5 +1,4 @@
 use crate::Message;
-use crate::backend::AppBackend;
 use crate::util::{column, present, row};
 use iced::widget::{Column, button, horizontal_rule, text_input};
 use iced::widget::{Row, text};
@@ -9,7 +8,7 @@ use sof_chargen::CORE_STATS;
 use sof_chargen::Stat::{Luck, Magic, Stamina};
 use std::iter::once;
 
-pub fn stats(backend: &AppBackend) -> Row<Message> {
+pub fn stats(backend: &Backend) -> Row<Message> {
     row(CORE_STATS.map(|stat| {
         row([
             column(
@@ -36,11 +35,10 @@ pub fn stats(backend: &AppBackend) -> Row<Message> {
     }))
 }
 
-fn top_row(backend: &AppBackend) -> Row<Message> {
+fn top_row(backend: &Backend) -> Row<Message> {
     iced::widget::row![
         iced::widget::row![
-            text_input("character name", &backend.get_character().name)
-                .on_input(Message::NameChanged)
+            text_input("character name", &backend.character().name).on_input(Message::NameChanged)
         ]
         .width(Length::FillPortion(3)),
         present("Stamina", backend.get_stat(Stamina)).width(Length::FillPortion(2)),
@@ -51,8 +49,8 @@ fn top_row(backend: &AppBackend) -> Row<Message> {
     .spacing(8)
 }
 
-fn culture_row(backend: &AppBackend) -> Row<Message> {
-    let char = backend.get_character();
+fn culture_row(backend: &Backend) -> Row<Message> {
+    let char = backend.character();
     iced::widget::row![
         present("Born", char.birth_location.as_ref().map(|l| &l.name))
             .width(Length::FillPortion(3)),
@@ -79,7 +77,7 @@ fn debug_buttons() -> Row<'static, Message> {
     ]
 }
 
-pub fn char_sheet(backend: &AppBackend) -> Column<Message> {
+pub fn char_sheet(backend: &Backend) -> Column<Message> {
     iced::widget::column! {
         top_row(backend),
         culture_row(backend),

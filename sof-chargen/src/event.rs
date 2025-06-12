@@ -1,6 +1,8 @@
 use crate::backend::Backend;
 use crate::character::{BIRTH_OMENS, BirthOmen, Stat};
-use crate::data::careers::{CareerTableEntry, CareerTableStar, get_affiliation, get_careers, get_rank, Career};
+use crate::data::careers::{
+    Career, CareerTableEntry, CareerTableStar, get_affiliation, get_careers, get_rank,
+};
 use crate::data::locations::{Culture, Faith, associated_faith, further_afield_culture};
 use crate::dice::{DiceRoll, MagicDice, d100};
 use crate::ipc::{Choice, Question};
@@ -26,8 +28,8 @@ macro_rules! run {
 }
 
 // todo i hate this i hate this i hate it so much
-gen fn roll_affiliation(backend: &impl Backend, mut disadvantage: usize) -> Choice {
-    let char = backend.get_character();
+gen fn roll_affiliation(backend: Backend, mut disadvantage: usize) -> Choice {
+    let char = backend.character();
     let loc = char.birth_location.clone().unwrap();
     let culture = char.culture.unwrap();
     let mut faith = char.faith.unwrap();
@@ -119,8 +121,8 @@ fn is_eligible(culture: Culture, career_table_star: CareerTableStar) -> bool {
     }
 }
 
-gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
-    let char = backend.get_character();
+gen fn change_rank(backend: Backend, rank: i8) -> Choice {
+    let char = backend.character();
     let loc = char.birth_location.clone().unwrap();
     let mut affiliation = char.affiliation.unwrap();
     let culture = char.culture.unwrap();
@@ -170,9 +172,9 @@ gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
                 // awkward limitation of gen fns - they can't return anything
                 // (and you can't get around that by passing a &mut arg)
                 // instead allow it to arbitrarily mutate the character and update our state after
-                run!(roll_affiliation(backend, disadvantage));
+                run!(roll_affiliation(backend.clone(), disadvantage));
 
-                let char = backend.get_character();
+                let char = backend.character();
                 faith = char.faith.unwrap();
                 affiliation = char.affiliation.unwrap();
                 rank = char.rank.unwrap();
@@ -182,7 +184,7 @@ gen fn change_rank(backend: &impl Backend, rank: i8) -> Choice {
     backend.set_career(career);
 }
 
-pub gen fn pick_stat(backend: &impl Backend) -> Choice {
+pub gen fn pick_stat(backend: Backend) -> Choice {
     let core_stat = choose_vec!(
         "Pick a core stat to roll next",
         CORE_STATS
@@ -213,7 +215,7 @@ pub gen fn pick_stat(backend: &impl Backend) -> Choice {
     }
 }
 
-pub fn roll_magic(backend: &impl Backend) {
+pub fn roll_magic(backend: Backend) {
     let roll = MagicDice::roll();
     if roll.result() >= 100 {
         println!("You died during character creation!");
@@ -221,27 +223,28 @@ pub fn roll_magic(backend: &impl Backend) {
 
     backend.set_stat(Stat::Magic, &roll);
 }
-pub fn roll_luck(backend: &impl Backend) {
+pub fn roll_luck(backend: Backend) {
     backend.set_stat(Stat::Luck, &d100());
 }
 
-pub fn roll_stamina(backend: &impl Backend) {
+pub fn roll_stamina(backend: Backend) {
     backend.set_stat(Stat::Stamina, &roll!(2 d 6));
 }
 
-pub fn roll_core_stats(backend: &impl Backend) -> impl Iterator<Item = Choice> {
-    pick_stat(backend)
-        .chain(pick_stat(backend))
-        .chain(pick_stat(backend))
-        .chain(pick_stat(backend))
-        .chain(pick_stat(backend))
+pub fn roll_core_stats(backend: Backend) -> impl Iterator<Item = Choice> {
+    pick_stat(backend.clone())
+        .chain(pick_stat(backend.clone()))
+        .chain(pick_stat(backend.clone()))
+        .chain(pick_stat(backend.clone()))
+        .chain(pick_stat(backend.clone()))
 }
 
 // Note: we move onto a new doc, which starts numbering from 1
 // https://docs.google.com/document/d/13-d2KpDkzUQod8Uby-l3rSK8wRsfeMtZbFOxDvsswhY
 // Step 1: Location of Birth
-pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
-    let rank = backend.get_character().rank.unwrap_or_default();
+pub gen fn pick_omens(backend: Backend) -> Choice {
+    println!("ASDF picking omens!");
+    let rank = backend.character().rank.unwrap_or_default();
 
     let omen = choose_vec!(consume "Pick your birth omen", BIRTH_OMENS);
     backend.set_omen(omen);
@@ -262,7 +265,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
             // though whether great or terrible they could not say.
             // When rolling a die during character creation, you may choose the result up to twice.
             // Inherit your guardians’ rank, then reroll your affiliation.
-            run!(roll_affiliation(backend, 0));
+            run!(roll_affiliation(backend.clone(), 0));
         }
         BirthOmen::PracticallyMinded => {
             // Whatever omens were present at your birth, your guardians were practical folk who
@@ -304,7 +307,7 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
             // Reroll Luck, but start one rank below your guardians and reroll your affiliation.
             backend.set_stat(Stat::Luck, &roll!(1 d 100));
             backend.set_rank(max(rank - 1, 0));
-            run!(roll_affiliation(backend, 0));
+            run!(roll_affiliation(backend.clone(), 0));
         }
         BirthOmen::PortentsOfDoom => {
             // Without explanation, your guardians shunned you from birth,
@@ -319,21 +322,21 @@ pub gen fn pick_omens<T: Backend>(backend: &T) -> Choice {
                 ),
             );
             backend.set_rank(max(rank - d3(), 0));
-            run!(roll_affiliation(backend, 1));
+            run!(roll_affiliation(backend.clone(), 1));
         }
     };
 
     // then we gain a career
-    let rank = backend.get_character().rank.unwrap_or_default();
+    let rank = backend.character().rank.unwrap_or_default();
     run!(change_rank(backend, rank));
 }
 
-pub gen fn test_pick_dice<T: Backend>(backend: &T) -> Choice {
+pub gen fn test_pick_dice(backend: Backend) -> Choice {
     let roll = maybe_roll!("test roll please ignore", backend, 1 d 10);
     println!("got {} in the gen fn", roll.result());
 }
 
-pub fn roll_location_of_birth(backend: &impl Backend) {
+pub fn roll_location_of_birth(backend: Backend) {
     let loc = crate::data::locations::location_table((d6(), d6(), d6()), d3());
 
     // ok just to speed things up a bit we're doing step 2 here too
@@ -379,12 +382,12 @@ pub fn roll_location_of_birth(backend: &impl Backend) {
     backend.set_birth_location(loc);
 }
 
-pub gen fn affiliation_rank_careers(backend: &impl Backend) -> Choice {
+pub gen fn affiliation_rank_careers(backend: Backend) -> Choice {
     let loc;
     let culture;
     {
         // we're mutating char later on, so don't borrow it for very long
-        let char = backend.get_character();
+        let char = backend.character();
         loc = char.birth_location.as_ref().unwrap().clone();
         culture = char.culture.unwrap();
     }
@@ -439,10 +442,10 @@ pub mod scenarios {
             far_afield: false,
         })
     }
-    pub fn kremish_accorder(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+    pub fn kremish_accorder(backend: Backend) -> impl Iterator<Item = Choice> {
         // scenario 1. You rolled a rank 3 slum folk kremish accorder
         // you should be offered the option to convert to Gytungrug
-        *backend.get_character_mut() = Character {
+        *backend.character_mut() = Character {
             birth_location: test_location(),
             culture: Some(Culture::Kremish),
             faith: Some(Faith::Accorder),
@@ -454,10 +457,10 @@ pub mod scenarios {
         change_rank(backend, 3)
     }
 
-    pub fn non_kremish_accorder(backend: &impl Backend) -> impl Iterator<Item = Choice> {
+    pub fn non_kremish_accorder(backend: Backend) -> impl Iterator<Item = Choice> {
         // scenario 2. You rolled a rank 3 slum folk valish accorder
         // you should NOT be offered the option to convert to Gytungrug
-        *backend.get_character_mut() = Character {
+        *backend.character_mut() = Character {
             birth_location: test_location(),
             culture: Some(Culture::Varlish),
             faith: Some(Faith::Accorder),

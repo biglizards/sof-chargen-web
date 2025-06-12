@@ -1,5 +1,6 @@
-use crate::backend::AppBackend;
 use std::sync::LazyLock;
+
+use sof_chargen::Backend;
 
 #[cfg(target_arch = "wasm32")]
 fn get_string_from_storage() -> Option<String> {
@@ -38,13 +39,7 @@ static BACKEND_STR: LazyLock<String> = LazyLock::new(|| {
     get_string_from_storage().unwrap_or_default()
 });
 
-// we don't use threads, so all types are vacuously Sync
-unsafe impl Sync for AppBackend {}
-
-pub static BACKEND: LazyLock<AppBackend> =
-    LazyLock::new(|| ron::from_str(&BACKEND_STR).unwrap_or_default());
-
-pub fn save_backend() {
-    let save = ron::to_string(&*BACKEND).expect("failed to serialize backend!");
+pub fn save_backend(backend: &Backend) {
+    let save = ron::to_string(backend).expect("failed to serialize backend!");
     save_string_to_storage(&save);
 }

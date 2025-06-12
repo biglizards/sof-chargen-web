@@ -12,9 +12,10 @@ use subenum::subenum;
 // the effect of taking a perk is ...
 //   - run some arbitrary function
 
+use crate::Stat;
+use crate::backend::Backend;
 use crate::data::careers::CareerClass;
 use crate::data::locations::Language;
-use crate::{Backend, Stat};
 
 #[derive(Clone, Default, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Perks {
@@ -274,93 +275,93 @@ enum CanTakePerk {
     YesIfTrainedIn(&'static str),
 }
 
-fn can_take_perk(perk: Perk, backend: &impl Backend) -> CanTakePerk {
+fn can_take_perk(_perk: Perk, _backend: &Backend) -> CanTakePerk {
     unimplemented!("Function under construction - not really needed during char gen anyawy");
 
-    use crate::character::Stat::*;
-    use CanTakePerk::*;
+    // use crate::character::Stat::*;
+    // use CanTakePerk::*;
 
-    let perks = &backend.get_character().perks;
+    // let perks = &backend.character().perks;
 
-    // need to know:
-    // all the character's stats
-    // how many instances of this perk they have
-    // do they have a free perk slot?
-    // do they have the pre-requisite perks?
-    // do you lack mutually exclusive perks?
-    // have you magically awakened?
-    // do they meet the fluff requirements (eg training)
+    // // need to know:
+    // // all the character's stats
+    // // how many instances of this perk they have
+    // // do they have a free perk slot?
+    // // do they have the pre-requisite perks?
+    // // do you lack mutually exclusive perks?
+    // // have you magically awakened?
+    // // do they meet the fluff requirements (eg training)
 
-    // ok lets try some decomposition
-    macro_rules! requires_clause {
-        ($perk:ident $base:literal+$addend:literal $stat:ident) => {
-            (backend.get_stat($stat).unwrap_or_default()
-                >= $base + ($addend*perks.count_perk(Arms, &Perk::$perk) as i8))
-        };
-        ($perk:ident $base:literal+$addend:literal $stat:ident and $($tail:tt)*) => {
-            (backend.get_stat($stat).unwrap_or_default()
-                >= $base + ($addend*perks.count_perk(Arms, &Perk::$perk) as i8))
-            && requires_clause!($perk $($tail)*)
-        };
-        ($perk:ident $base:literal+$addend:literal $stat:ident or $($tail:tt)*) => {
-            (backend.get_stat($stat).unwrap_or_default()
-                >= $base + ($addend*perks.count_perk(Arms, &Perk::$perk) as i8))
-            || requires_clause!($perk $($tail)*)
-        };
-        ($perk:ident $base:literal $stat:ident) => {
-            (backend.get_stat($stat).unwrap_or_default() >= $base)
-        };
-        ($perk:ident $base:literal $stat:ident and $($tail:tt)*) => {
-            (backend.get_stat($stat).unwrap_or_default() >= $base) && requires_clause!($perk $($tail)*)
-        };
-        ($perk:ident $base:literal $stat:ident or $($tail:tt)*) => {
-            (backend.get_stat($stat).unwrap_or_default() >= $base) || requires_clause!($perk $($tail)*)
-        };
-    }
-    macro_rules! requires {
-        ($perk:ident, squeeble: $training:expr, $($tail:tt)*) => {
-            if (requires_clause!($perk $($tail)*)) {
-                $training
-            } else {
-                False
-            }
-        };
-        ($perk:ident, training: $training:expr, $($tail:tt)*) => {
-            requires!($perk, squeeble: YesIfTrainedIn($training), $($tail)*)
-        };
-        ($perk:ident, $($tail:tt)*) => {
-            requires!($perk, squeeble: True, $($tail)*)
-        };
-    }
+    // // ok lets try some decomposition
+    // macro_rules! requires_clause {
+    //     ($perk:ident $base:literal+$addend:literal $stat:ident) => {
+    //         (backend.get_stat($stat).unwrap_or_default()
+    //             >= $base + ($addend*perks.count_perk(Arms, &Perk::$perk) as i8))
+    //     };
+    //     ($perk:ident $base:literal+$addend:literal $stat:ident and $($tail:tt)*) => {
+    //         (backend.get_stat($stat).unwrap_or_default()
+    //             >= $base + ($addend*perks.count_perk(Arms, &Perk::$perk) as i8))
+    //         && requires_clause!($perk $($tail)*)
+    //     };
+    //     ($perk:ident $base:literal+$addend:literal $stat:ident or $($tail:tt)*) => {
+    //         (backend.get_stat($stat).unwrap_or_default()
+    //             >= $base + ($addend*perks.count_perk(Arms, &Perk::$perk) as i8))
+    //         || requires_clause!($perk $($tail)*)
+    //     };
+    //     ($perk:ident $base:literal $stat:ident) => {
+    //         (backend.get_stat($stat).unwrap_or_default() >= $base)
+    //     };
+    //     ($perk:ident $base:literal $stat:ident and $($tail:tt)*) => {
+    //         (backend.get_stat($stat).unwrap_or_default() >= $base) && requires_clause!($perk $($tail)*)
+    //     };
+    //     ($perk:ident $base:literal $stat:ident or $($tail:tt)*) => {
+    //         (backend.get_stat($stat).unwrap_or_default() >= $base) || requires_clause!($perk $($tail)*)
+    //     };
+    // }
+    // macro_rules! requires {
+    //     ($perk:ident, squeeble: $training:expr, $($tail:tt)*) => {
+    //         if (requires_clause!($perk $($tail)*)) {
+    //             $training
+    //         } else {
+    //             False
+    //         }
+    //     };
+    //     ($perk:ident, training: $training:expr, $($tail:tt)*) => {
+    //         requires!($perk, squeeble: YesIfTrainedIn($training), $($tail)*)
+    //     };
+    //     ($perk:ident, $($tail:tt)*) => {
+    //         requires!($perk, squeeble: True, $($tail)*)
+    //     };
+    // }
 
-    match perk {
-        Perk::Addict => DiscussWithDM,
-        Perk::OldWound => False,
-        Perk::ArmourTraining => {
-            requires!(ArmourTraining, training: "a combat trainer specialised in armoured combat", 0+40 Block)
-        }
-        Perk::Swimmer => True,
-        Perk::Knockout => requires!(Knockout, 30 Swing and 30 Thrust),
-        Perk::Mountaineer => requires!(Mountaineer, 30 Arms and 30 Balance),
-        Perk::FightingStyle(_) => todo!(), // can't right now // requires!(FightingStyle, 40+30 Arms subskill),
-        Perk::Grappler => requires!(Grappler, 40 Arms),
-        Perk::Riposte => requires!(Riposte, 40 Block),
-        Perk::Sentinel => requires!(Sentinel, 40 Thrust or 40 Aim),
-        Perk::Adrenaline => requires!(Adrenaline, 50 Arms),
-        Perk::Feint => requires!(Feint, 50 Swing or 50 Thrust),
-        Perk::Momentum => requires!(Momentum, 50 Swing),
-        Perk::PerfectParry => {
-            requires!(PerfectParry, training: "training from a parrying master", 60 Block)
-        }
-        _ => todo!(),
-    };
-    False
+    // match perk {
+    //     Perk::Addict => DiscussWithDM,
+    //     Perk::OldWound => False,
+    //     Perk::ArmourTraining => {
+    //         requires!(ArmourTraining, training: "a combat trainer specialised in armoured combat", 0+40 Block)
+    //     }
+    //     Perk::Swimmer => True,
+    //     Perk::Knockout => requires!(Knockout, 30 Swing and 30 Thrust),
+    //     Perk::Mountaineer => requires!(Mountaineer, 30 Arms and 30 Balance),
+    //     Perk::FightingStyle(_) => todo!(), // can't right now // requires!(FightingStyle, 40+30 Arms subskill),
+    //     Perk::Grappler => requires!(Grappler, 40 Arms),
+    //     Perk::Riposte => requires!(Riposte, 40 Block),
+    //     Perk::Sentinel => requires!(Sentinel, 40 Thrust or 40 Aim),
+    //     Perk::Adrenaline => requires!(Adrenaline, 50 Arms),
+    //     Perk::Feint => requires!(Feint, 50 Swing or 50 Thrust),
+    //     Perk::Momentum => requires!(Momentum, 50 Swing),
+    //     Perk::PerfectParry => {
+    //         requires!(PerfectParry, training: "training from a parrying master", 60 Block)
+    //     }
+    //     _ => todo!(),
+    // };
+    // False
 }
 
 impl Perk {
-    fn take_effect(&self, backend: &impl Backend) {
-        match self {
-            _ => todo!(),
-        }
+    fn take_effect(&self, _backend: &Backend) {
+        // match self {
+        //     _ => todo!(),
+        // }
     }
 }
