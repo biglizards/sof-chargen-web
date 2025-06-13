@@ -39,7 +39,7 @@ pub fn main() -> iced::Result {
         .theme(App::theme)
         .settings(settings)
         .window_size((1500.0, 600.0))
-        .run()
+        .run_with(|| (save::load_app(), iced::Task::none()))
 }
 
 #[derive(Default)]
@@ -85,12 +85,6 @@ impl Message {
 
 impl App {
     fn update(&mut self, message: Message) {
-        // step 1: add all log entries to the log
-        for thing in self.backend.get_log().drain(..) {
-            self.log.push('\n');
-            self.log.push_str(&thing);
-        }
-
         let should_advance = message.should_advance();
 
         match message {
@@ -162,8 +156,15 @@ impl App {
             self.advance_event();
         }
 
+        // step 1: add all log entries to the log
+        println!("running update!");
+        for thing in self.backend.get_log().drain(..) {
+            self.log.push('\n');
+            self.log.push_str(&thing);
+        }
+
         if self.current_event.is_none() {
-            save::save_backend(&self.backend);
+            save::save_app(&self);
         }
     }
 

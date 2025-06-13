@@ -236,7 +236,7 @@ pub fn roll_core_stats(backend: Backend) -> impl Iterator<Item = Choice> {
         .chain(pick_stat(backend.clone()))
         .chain(pick_stat(backend.clone()))
         .chain(pick_stat(backend.clone()))
-        .chain(pick_stat(backend.clone()))
+        .chain(pick_stat(backend))
 }
 
 // Note: we move onto a new doc, which starts numbering from 1
