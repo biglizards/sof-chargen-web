@@ -8,7 +8,7 @@ use sof_chargen::CORE_STATS;
 use sof_chargen::Stat::{Luck, Magic, Stamina};
 use std::iter::once;
 
-pub fn stats(backend: &Backend) -> Row<Message> {
+pub fn stats(backend: &Backend) -> Row<'_, Message> {
     row(CORE_STATS.map(|stat| {
         row([
             column(
@@ -35,7 +35,7 @@ pub fn stats(backend: &Backend) -> Row<Message> {
     }))
 }
 
-fn top_row(backend: &Backend) -> Row<Message> {
+fn top_row(backend: &Backend) -> Row<'_, Message> {
     iced::widget::row![
         iced::widget::row![
             text_input("character name", &backend.character().name).on_input(Message::NameChanged)
@@ -49,7 +49,7 @@ fn top_row(backend: &Backend) -> Row<Message> {
     .spacing(8)
 }
 
-fn culture_row(backend: &Backend) -> Row<Message> {
+fn culture_row(backend: &Backend) -> Row<'_, Message> {
     let char = backend.character();
     iced::widget::row![
         present("Born", char.birth_location.as_ref().map(|l| &l.name))
@@ -77,7 +77,7 @@ fn debug_buttons() -> Row<'static, Message> {
     ]
 }
 
-pub fn char_sheet(backend: &Backend) -> Column<Message> {
+pub fn char_sheet(backend: &Backend) -> Column<'_, Message> {
     iced::widget::column! {
         top_row(backend),
         culture_row(backend),

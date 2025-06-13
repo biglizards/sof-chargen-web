@@ -23,7 +23,7 @@ pub fn render(thing: Option<impl Display>) -> String {
     }
 }
 
-pub fn present(name: &str, thing: Option<impl Display>) -> iced::widget::text::Rich<Message> {
+pub fn present(name: &str, thing: Option<impl Display>) -> iced::widget::text::Rich<'_, Message> {
     rich_text([
         span(name).font(Font {
             weight: font::Weight::Bold,

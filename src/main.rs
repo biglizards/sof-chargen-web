@@ -176,10 +176,10 @@ impl App {
         }
     }
 
-    fn view(&self) -> Row<Message> {
+    fn view(&self) -> Row<'_, Message> {
         iced::widget::row! {
             char_sheet::char_sheet(&self.backend),
-            self.sidebar(&self.backend),
+            self.sidebar(),
         }
     }
 

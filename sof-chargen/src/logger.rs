@@ -1,6 +1,6 @@
 use core::fmt;
 
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::Serialize;
 
 pub struct BaseLogger {}
 

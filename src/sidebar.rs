@@ -2,12 +2,11 @@ use crate::{App, Message, util};
 use iced::Length;
 use iced::widget::{Column, button, horizontal_rule, row, slider, text, vertical_rule};
 use iced::widget::{column, text_input};
-use sof_chargen::Backend;
 use sof_chargen::ipc::Choice;
 use sof_chargen::ipc::Choice::Selection;
 
 impl App {
-    fn choice_input(&self) -> Column<Message> {
+    fn choice_input(&self) -> Column<'_, Message> {
         println!("doing choice input...");
         match &self.current_choice {
             None => column![text("No choice. Press a button.")],
@@ -70,7 +69,7 @@ impl App {
         }
     }
 
-    pub(crate) fn sidebar(&self, backend: &Backend) -> Column<Message> {
+    pub(crate) fn sidebar(&self) -> Column<'_, Message> {
         column!(
             text(&self.log).size(16),
             horizontal_rule(1),
