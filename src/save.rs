@@ -1,7 +1,6 @@
 use std::sync::LazyLock;
 
 use crate::App;
-use sof_chargen::Backend;
 
 const SAVE_FILE: &'static str = "character.sof";
 const LOG_FILE: &'static str = "character.log";
