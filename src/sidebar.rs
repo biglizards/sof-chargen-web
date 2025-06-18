@@ -1,4 +1,3 @@
-use crate::backend::AppBackend;
 use crate::{App, Message, util};
 use iced::Length;
 use iced::widget::{Column, button, horizontal_rule, row, slider, text, vertical_rule};
@@ -14,17 +13,28 @@ impl App {
                 text(s.description),
                 text_input("type trait here", &self.trait_entry).on_input(Message::SubmitTrait)
             ],
-            Selection(s) => column![
-                text(s.description),
-                util::row(
+            Selection(s) => {
+                let x = column![
+                    text(s.description),
+                    util::row(
+                        s.options
+                            .iter()
+                            .enumerate()
+                            .map(|(i, c)| button(&*c.description).on_press(Message::Choose(i))),
+                    )
+                    .spacing(5)
+                    .wrap()
+                ];
+                println!(
+                    "selection is {} [{:?}]",
+                    s.description,
                     s.options
                         .iter()
-                        .enumerate()
-                        .map(|(i, c)| button(&*c.description).on_press(Message::Choose(i))),
-                )
-                .spacing(5)
-                .wrap()
-            ],
+                        .map(|x| &x.description)
+                        .collect::<Vec<&String>>()
+                );
+                x
+            }
             Choice::PickRoll(r) => {
                 // annoying iced quirk: sliders require T: From<u8> which precludes using i8
                 let range = r.roll.range().into_inner();
@@ -58,9 +68,9 @@ impl App {
         }
     }
 
-    pub(crate) fn sidebar(&self, backend: &AppBackend) -> Column<Message> {
+    pub(crate) fn sidebar(&self) -> Column<'_, Message> {
         column![
-            text(backend.log.borrow().clone()).size(16),
+            text(&self.log).size(16),
             horizontal_rule(1),
         ]
         .push(if let Some(c) = &self.current_choice {
@@ -69,7 +79,7 @@ impl App {
             column![
                 text(format!(
                     "Current life stage: {:?}",
-                    backend.get_character().life_stage
+                    self.backend.character().life_stage
                 )),
                 button("Advance").on_press(Message::AdvanceLifeStage)
             ]

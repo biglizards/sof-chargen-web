@@ -40,13 +40,16 @@ pub fn main() -> iced::Result {
         .theme(App::theme)
         .settings(settings)
         .window_size((1500.0, 600.0))
-        .run()
+        .run_with(|| (save::load_app(), iced::Task::none()))
 }
 
 #[derive(Default)]
 struct App {
     current_event: Option<Box<dyn Event>>,
     current_choice: Option<Choice>,
+
+    backend: Backend,
+    log: String,
 
     trait_entry: String,
     dice_slider: i16,
@@ -83,12 +86,21 @@ impl Message {
 }
 
 impl App {
+    fn next_stage(&self) -> Option<Box<dyn Event>> {
+        let stage = self.backend.character().life_stage;
+        if let Some((stage, event)) = stage.next(self.backend.clone()) {
+            self.backend.character_mut().life_stage = stage;
+            Some(event)
+        } else {
+            None
+        }
+    }
+
     fn update(&mut self, message: Message) {
         let should_advance = message.should_advance();
-        let backend = &*save::BACKEND;
 
         match message {
-            Message::NameChanged(name) => backend.get_character_mut().name = name,
+            Message::NameChanged(name) => self.backend.character_mut().name = name,
             Message::Choose(i) => match &self.current_choice {
                 Some(Choice::Selection(s)) => s.chosen.set(i),
                 _ => panic!("attempted to choose when there is no choice!"),
@@ -113,35 +125,43 @@ impl App {
                 _ => panic!("attempted to answer a question when none were posed!"),
             },
             Message::ResetAll => {
-                *backend.get_character_mut() = Character::default();
-                backend.log.borrow_mut().clear();
+                *self.backend.character_mut() = Character::default();
+                self.log.clear();
             }
             Message::RollStats => {
-                self.current_event = Some(Box::new(birth::roll_core_stats(backend)));
+                self.current_event = Some(Box::new(birth::roll_core_stats(self.backend.clone())));
             }
-            Message::PickStar => self.current_event = Some(Box::new(birth::pick_omens(backend))),
-            Message::RollLocation => birth::roll_location_of_birth(backend),
+            Message::PickStar => {
+                self.current_event = Some(Box::new(birth::pick_omens(self.backend.clone())))
+            }
+            Message::RollLocation => birth::roll_location_of_birth(&self.backend),
             Message::RollCareers => {
-                self.current_event = Some(Box::new(birth::affiliation_rank_careers(backend)))
+                self.current_event = Some(Box::new(birth::affiliation_rank_careers(
+                    self.backend.clone(),
+                )))
             }
             Message::SliderChanged(v) => self.dice_slider = v,
             Message::DebugSlider => {
-                self.current_event = Some(Box::new(event::test_pick_dice(backend)))
+                self.current_event = Some(Box::new(event::test_pick_dice(self.backend.clone())))
             }
             Message::DebugScenario(i) => {
                 self.current_choice = None;
                 match i {
-                    1 => self.current_event = Some(Box::from(scenarios::kremish_accorder(backend))),
-                    2 => {
+                    1 => {
                         self.current_event =
-                            Some(Box::from(scenarios::non_kremish_accorder(backend)))
+                            Some(Box::from(scenarios::kremish_accorder(self.backend.clone())))
+                    }
+                    2 => {
+                        self.current_event = Some(Box::from(scenarios::non_kremish_accorder(
+                            self.backend.clone(),
+                        )))
                     }
                     _ => println!("invalid debug scenario!"),
                 }
             }
             Message::AdvanceLifeStage => {
                 self.current_choice = None;
-                self.current_event = backend.next_stage();
+                self.current_event = self.next_stage();
             }
         }
 
@@ -149,8 +169,15 @@ impl App {
             self.advance_event();
         }
 
+        // step 1: add all log entries to the log
+        println!("running update!");
+        for thing in self.backend.get_log().drain(..) {
+            self.log.push('\n');
+            self.log.push_str(&thing);
+        }
+
         if self.current_event.is_none() {
-            save::save_backend();
+            save::save_app(&self);
         }
     }
 
@@ -162,10 +189,10 @@ impl App {
         }
     }
 
-    fn view(&self) -> Row<Message> {
+    fn view(&self) -> Row<'_, Message> {
         iced::widget::row! {
-            char_sheet::char_sheet(&save::BACKEND),
-            self.sidebar(&save::BACKEND),
+            char_sheet::char_sheet(&self.backend),
+            self.sidebar(),
         }
     }
 

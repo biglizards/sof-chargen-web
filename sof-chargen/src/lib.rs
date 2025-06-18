@@ -1,4 +1,5 @@
 #![feature(gen_blocks)]
+#![allow(dead_code)]
 #![feature(trait_alias)]
 
 #[macro_use]
@@ -12,6 +13,7 @@ mod character;
 pub mod dice;
 pub mod event;
 pub mod ipc;
+pub mod logger;
 
 pub mod data;
 

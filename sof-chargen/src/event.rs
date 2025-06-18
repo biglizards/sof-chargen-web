@@ -9,7 +9,7 @@ use crate::ipc::Choice;
 use crate::{maybe_roll, roll};
 pub trait Event = Iterator<Item = Choice>;
 
-pub gen fn test_pick_dice<T: Backend>(backend: &T) -> Choice {
+pub gen fn test_pick_dice(backend: Backend) -> Choice {
     let roll = maybe_roll!("test roll please ignore", backend, 1 d 10);
     println!("got {} in the gen fn", roll.result());
 }
@@ -32,10 +32,10 @@ pub mod scenarios {
             far_afield: false,
         })
     }
-    pub fn kremish_accorder(backend: &impl Backend) -> impl Event {
+    pub fn kremish_accorder(backend: Backend) -> impl Event {
         // scenario 1. You rolled a rank 3 slum folk kremish accorder
         // you should be offered the option to convert to Gytungrug
-        *backend.get_character_mut() = Character {
+        *backend.character_mut() = Character {
             birth_location: test_location(),
             culture: Some(Culture::Kremish),
             faith: Some(Faith::Accorder),
@@ -47,10 +47,10 @@ pub mod scenarios {
         util::change_rank(backend, 3)
     }
 
-    pub fn non_kremish_accorder(backend: &impl Backend) -> impl Event {
+    pub fn non_kremish_accorder(backend: Backend) -> impl Event {
         // scenario 2. You rolled a rank 3 slum folk valish accorder
         // you should NOT be offered the option to convert to Gytungrug
-        *backend.get_character_mut() = Character {
+        *backend.character_mut() = Character {
             birth_location: test_location(),
             culture: Some(Culture::Varlish),
             faith: Some(Faith::Accorder),

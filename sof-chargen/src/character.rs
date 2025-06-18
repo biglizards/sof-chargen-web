@@ -128,6 +128,7 @@ enum CheckResult {
     CriticalSuccess = 5,
 }
 
+#[allow(dead_code)] // TODO under construction
 fn check(to_beat: u64, roll: u64) -> CheckResult {
     match roll {
         1..=5 => CriticalSuccess,

@@ -13,7 +13,7 @@ pub enum LifeStage {
 
 // defines the order in which one rolls events
 impl LifeStage {
-    pub fn next(&self, backend: &'static impl Backend) -> Option<(LifeStage, Box<dyn Event>)> {
+    pub fn next(&self, backend: Backend) -> Option<(LifeStage, Box<dyn Event>)> {
         match self {
             LifeStage::Intro => Some((
                 LifeStage::RollStats,
@@ -21,7 +21,7 @@ impl LifeStage {
             )),
             LifeStage::RollStats => {
                 // this one has no choices in, so do it before rolling parent stuff
-                birth::roll_location_of_birth(backend);
+                birth::roll_location_of_birth(&backend);
                 Some((
                     LifeStage::RollParents,
                     Box::new(birth::affiliation_rank_careers(backend)),
